@@ -1,30 +1,25 @@
 import { useRouter } from 'expo-router';
 import React, { createContext, ReactNode, useContext, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Account, Client, ID } from 'react-native-appwrite';
 import Toast from 'react-native-toast-message';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Appwrite Configuration
-const client = new Client()
-    .setEndpoint('https://cloud.appwrite.io/v1')
-    .setProject(process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID)
-
-export const account = new Account(client);
+// Backend API Configuration
+const API_BASE_URL = 'http://localhost:8000'; // Backend server URL
 
 // Define types
 export interface User {
-  $id: string; // Appwrite user ID
-  $createdAt: string; // Add createdAt
-  $updatedAt: string; // Add updatedAt
-  name: string; // Assuming name is stored in Appwrite user document
-  phone: string; // Assuming phone is stored in Appwrite user document
-  email?: string; // Email might be null for phone users
-  photoURL?: string; // Assuming photoURL is stored if needed (will be in custom profile)
-  // Add other Appwrite user properties based on account.get() output
-  status: boolean;
-  phoneVerification: boolean;
-  emailVerification: boolean;
-  prefs: { [key: string]: any };
+  id: string;
+  email: string;
+  name: string;
+  userType?: string;
+  age?: number;
+  location?: string;
+  languages?: string[];
+  profileImage?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface AuthContextType {
@@ -33,10 +28,10 @@ interface AuthContextType {
   isSendingOtp: boolean;
   isVerifyingOtp: boolean;
   isAuthenticated: boolean;
-  sessionId: string | null;
+  token: string | null;
   checkAuthStatus: () => Promise<void>;
-  sendOtp: (phone: string) => Promise<string | null>;
-  verifyOtp: (userId: string, otp: string) => Promise<boolean>;
+  sendOtp: (email: string) => Promise<boolean>;
+  verifyOtp: (email: string, otp: string) => Promise<boolean>;
   signOut: () => Promise<void>;
 }
 
@@ -52,133 +47,112 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const router = useRouter();
-
-  // Helper to sanitize phone number to +[country code][number]
-  const sanitizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      return '+91' + digits;
-    }
-    if (digits.length > 10 && digits.startsWith('91')) {
-      return '+' + digits;
-    }
-    return phone;
-  };
 
   const checkAuthStatus = async (): Promise<void> => {
     setIsLoading(true);
     try {
       console.log('Checking auth status...');
-      const appwriteUser = await account.get();
-      console.log('Appwrite user:', appwriteUser);
+      const storedToken = await AsyncStorage.getItem('authToken');
       
-      if (appwriteUser) {
-        setUser({
-          $id: appwriteUser.$id,
-          $createdAt: appwriteUser.$createdAt,
-          $updatedAt: appwriteUser.$updatedAt,
-          name: appwriteUser.name || 'User',
-          phone: appwriteUser.phone || '',
-          email: appwriteUser.email || undefined,
-          status: appwriteUser.status,
-          phoneVerification: appwriteUser.phoneVerification,
-          emailVerification: appwriteUser.emailVerification,
-          prefs: appwriteUser.prefs || {},
+      if (storedToken) {
+        // Verify token with backend
+        const response = await axios.get(`${API_BASE_URL}/auth/verify-token`, {
+          headers: { Authorization: `Bearer ${storedToken}` }
         });
-        setIsAuthenticated(true);
         
-        const sessions = await account.listSessions();
-        const currentSession = sessions.sessions.find(session => session.current);
-        if (currentSession) {
-          setSessionId(currentSession.$id);
+        if (response.data.user) {
+          setUser(response.data.user);
+          setToken(storedToken);
+          setIsAuthenticated(true);
+        } else {
+          await AsyncStorage.removeItem('authToken');
+          setUser(null);
+          setToken(null);
+          setIsAuthenticated(false);
         }
       } else {
         setUser(null);
+        setToken(null);
         setIsAuthenticated(false);
-        setSessionId(null);
       }
     } catch (error: any) {
-      console.error("Error checking session:", error);
+      console.error("Error checking auth status:", error);
+      await AsyncStorage.removeItem('authToken');
       setUser(null);
+      setToken(null);
       setIsAuthenticated(false);
-      setSessionId(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const sendOtp = async (phone: string): Promise<string | null> => {
+  const sendOtp = async (email: string): Promise<boolean> => {
     setIsSendingOtp(true);
     try {
-      const sanitizedPhone = sanitizePhone(phone);
-      console.log('Sending OTP to:', sanitizedPhone);
+      console.log('Sending OTP to:', email);
 
-      const token = await account.createPhoneToken(
-        ID.unique(),
-        sanitizedPhone
-      );
-      console.log('Phone token created:', token);
-      
-      Toast.show({
-        type: 'success',
-        text1: 'OTP Sent',
-        text2: 'Please enter the OTP sent to your phone.',
+      const response = await axios.post(`${API_BASE_URL}/auth/request-otp`, {
+        email: email
       });
-
-      return token.userId;
+      
+      if (response.data.message === 'OTP sent to email') {
+        Toast.show({
+          type: 'success',
+          text1: 'OTP Sent',
+          text2: 'Please enter the OTP sent to your email.',
+        });
+        return true;
+      }
+      return false;
     } catch (error: any) {
       console.error("Error sending OTP:", error);
       Toast.show({
         type: 'error',
         text1: 'Failed to send OTP',
-        text2: error.message || 'Please check your number and try again.',
+        text2: error.response?.data?.message || 'Please check your email and try again.',
       });
-      return null;
+      return false;
     } finally {
       setIsSendingOtp(false);
     }
   };
 
-  const verifyOtp = async (userId: string, otp: string): Promise<boolean> => {
+  const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
     setIsVerifyingOtp(true);
     try {
-      console.log(`Verifying OTP for userId: ${userId}`);
+      console.log(`Verifying OTP for email: ${email}`);
       
-      // Delete all existing sessions
-      try {
-        const sessions = await account.listSessions();
-        for (const session of sessions.sessions) {
-          await account.deleteSession(session.$id);
-        }
-        console.log('Deleted existing sessions');
-      } catch (error) {
-        console.log('Error deleting sessions:', error);
-      }
-      
-      // Create new session with the OTP
-      await account.createSession(userId, otp);
-      console.log('Session created successfully');
-
-      // Update auth status
-      await checkAuthStatus();
-
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: 'Logged in successfully',
+      const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
+        email: email,
+        otp: otp
       });
+      
+      if (response.data.token && response.data.user) {
+        // Store token and user data
+        await AsyncStorage.setItem('authToken', response.data.token);
+        setToken(response.data.token);
+        setUser(response.data.user);
+        setIsAuthenticated(true);
 
-      router.replace('/(tabs)');
-      return true;
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: 'Logged in successfully',
+        });
+
+        router.replace('/(tabs)');
+        return true;
+      }
+      return false;
     } catch (error: any) {
       console.error("Error verifying OTP:", error);
       Toast.show({
         type: 'error',
         text1: 'Invalid OTP',
-        text2: error.message || 'Please check the OTP and try again.',
+        text2: error.response?.data?.message || 'Please check the OTP and try again.',
       });
       return false;
     } finally {
@@ -189,10 +163,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      await account.deleteSession("current");
+      await AsyncStorage.removeItem('authToken');
       setUser(null);
+      setToken(null);
       setIsAuthenticated(false);
-      setSessionId(null);
 
       Toast.show({
         type: 'success',
@@ -219,7 +193,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isSendingOtp,
     isVerifyingOtp,
     isAuthenticated,
-    sessionId,
+    token,
     checkAuthStatus,
     sendOtp,
     verifyOtp,
