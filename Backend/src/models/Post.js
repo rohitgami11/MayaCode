@@ -13,7 +13,7 @@ const locationSchema = new mongoose.Schema({
 });
 
 const postSchema = new mongoose.Schema({
-  phone: {
+  email: {
     type: String,
     required: true
   },
