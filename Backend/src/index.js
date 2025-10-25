@@ -27,6 +27,11 @@ async function initializeServices() {
     messageService.startBufferFlushing();
     
     console.log("✅ All services initialized successfully");
+    console.log("📧 Email OTP Authentication is ready!");
+    console.log("🔗 Test endpoints:");
+    console.log("   POST /auth/request-otp");
+    console.log("   POST /auth/verify-otp");
+    console.log("   GET /auth/verify-token");
     
     // Setup socket after services are ready
     setupSocket(server);

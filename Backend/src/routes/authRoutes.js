@@ -1,24 +1,21 @@
-const express = require("express");
-const passport = require("passport");
-
+const express = require('express');
 const router = express.Router();
+const { 
+  checkEmailInUse, 
+  requestOtp, 
+  verifyOtp, 
+  updateProfile, 
+  verifyToken,
+  verifyTokenEndpoint
+} = require('../controllers/authController');
 
-router.get("/", (req, res) => {
-  res.send("<a href='/auth/google'>Login with Google</a>");
-});
+// Public routes
+router.post('/check-email', checkEmailInUse);
+router.post('/request-otp', requestOtp);
+router.post('/verify-otp', verifyOtp);
 
-router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-
-router.get("/google/callback", passport.authenticate("google", { failureRedirect: "/" }), (req, res) => {
-  res.redirect("/auth/profile");
-});
-
-router.get("/profile", (req, res) => {
-  res.send(`Welcome ${req.user.displayName}`);
-});
-
-router.get("/logout", (req, res) => {
-  req.logout(() => res.redirect("/"));
-});
+// Protected routes (require authentication)
+router.post('/update-profile', verifyToken, updateProfile);
+router.get('/verify-token', verifyTokenEndpoint);
 
 module.exports = router;

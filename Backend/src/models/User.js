@@ -1,11 +1,17 @@
 const mongoose = require('mongoose');
 
 const userProfileSchema = new mongoose.Schema({
-  phone: {
+  email: {
     type: String,
     required: true,
     unique: true,
-    index: true
+    lowercase: true,
+    trim: true
+  },
+  phone: {
+    type: String,
+    unique: true,
+    sparse: true
   },
   name: {
     type: String,
@@ -55,8 +61,8 @@ const userProfileSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Drop the userId index if it exists
-userProfileSchema.index({ userId: 1 }, { unique: true, sparse: true });
-userProfileSchema.index({ phone: 1 }, { unique: true });
+// Indexes for faster queries
+userProfileSchema.index({ email: 1 });
+userProfileSchema.index({ phone: 1 });
 
 module.exports = mongoose.model('UserProfile', userProfileSchema); 

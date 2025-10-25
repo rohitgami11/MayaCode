@@ -13,7 +13,12 @@ const authRoutes = require("./routes/authRoutes.js");
 const messageRoutes = require("./routes/messageRoutes.js");
 
 require("dotenv").config()
-// console.log("Client ID:", process.env.GOOGLE_CLIENT_ID);
+
+// Set environment variables if not already set
+process.env.SMTP_USER = process.env.SMTP_USER || 'rohitgami2003@gmail.com';
+process.env.SMTP_PASS = process.env.SMTP_PASS || 'lfxcczjulqajfxxh';
+process.env.JWT_SECRET_VERIFY = process.env.JWT_SECRET_VERIFY || '8d4e0de1dc4adfkbmf919d3328394d15c96ca';
+
 connectDB();
 
 const app = express();
