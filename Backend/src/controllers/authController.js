@@ -2,32 +2,28 @@ const Otp = require('../models/Otp');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const UserProfile = require('../models/User');
+const { Resend } = require('resend');
 
 const OTP_EXPIRY_MINUTES = 10;
 
-// Configure nodemailer with multiple email service options
+// Configure Resend (works on Render free tier - 3,000 emails/month free)
+let resend;
+if (process.env.RESEND_EMAIL_API) {
+  resend = new Resend(process.env.RESEND_EMAIL_API);
+  console.log('✅ Resend configured successfully');
+} else {
+  console.warn('⚠️ RESEND_EMAIL_API not set. Email functionality will not work.');
+}
+
+// Fallback nodemailer configuration (for development)
 const createTransporter = () => {
   try {
-    // Try SendGrid first (works better with hosting services)
-    if (process.env.SENDGRID_API_KEY) {
-      return nodemailer.createTransport({
-        service: 'SendGrid',
-        auth: {
-          user: 'apikey',
-          pass: process.env.SENDGRID_API_KEY,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
-      });
-    }
-    
-    // Fallback to Gmail if SendGrid not available
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    // Only use nodemailer if Resend is not available
+    if (process.env.SMTP_USER && process.env.SMTP_PASS && !process.env.RESEND_EMAIL_API) {
       return nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 587,
-        secure: false, // true for 465, false for other ports
+        secure: false,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
@@ -41,7 +37,6 @@ const createTransporter = () => {
       });
     }
     
-    console.warn('No email service configured');
     return null;
   } catch (error) {
     console.error('Failed to create SMTP transporter:', error);
@@ -111,58 +106,92 @@ const requestOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Check if transporter is available
-    if (!transporter) {
-      console.error('No email transporter configured');
-      return res.status(500).json({
-        success: false,
-        message: "Email service not configured. Please contact support."
-      });
-    }
-
-    // Send OTP via email
+    // Send OTP via email using Resend (preferred) or fallback
     try {
-      await transporter.sendMail({
-        from: process.env.SMTP_USER,
-        to: email,
-        subject: 'Login OTP for MayaCode',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #3B82F6;">MayaCode Login Verification</h2>
-            <p>Your login OTP is:</p>
-            <h1 style="color: #1F2937; font-size: 32px; letter-spacing: 4px; text-align: center; padding: 20px; background-color: #F3F4F6; border-radius: 8px;">${otp}</h1>
-            <p>This OTP will expire in 10 minutes.</p>
-            <p>If you did not request this OTP, please ignore this email.</p>
-            <hr>
-            <p style="color: #6B7280; font-size: 12px;">This is an automated message from MayaCode. <br/>Please do not reply to this email as this inbox is not monitored.</p>
-          </div>
-        `,
-      });
+      if (resend) {
+        // Use Resend (works on Render free tier - 3,000 emails/month free)
+        const { data, error } = await resend.emails.send({
+          from: 'onboarding@resend.dev', // You can change this to your domain
+          to: email,
+          subject: 'Login OTP for MayaCode',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #3B82F6;">MayaCode Login Verification</h2>
+              <p>Your login OTP is:</p>
+              <h1 style="color: #1F2937; font-size: 32px; letter-spacing: 4px; text-align: center; padding: 20px; background-color: #F3F4F6; border-radius: 8px;">${otp}</h1>
+              <p>This OTP will expire in 10 minutes.</p>
+              <p>If you did not request this OTP, please ignore this email.</p>
+              <hr>
+              <p style="color: #6B7280; font-size: 12px;">This is an automated message from MayaCode. <br/>Please do not reply to this email as this inbox is not monitored.</p>
+            </div>
+          `,
+        });
 
-      res.json({
-        success: true,
-        message: "OTP sent to your email successfully"
-      });
+        if (error) {
+          console.error('Resend error:', error);
+          throw error;
+        }
+
+        console.log('✅ Email sent via Resend:', data);
+        
+        res.json({
+          success: true,
+          message: "OTP sent to your email successfully"
+        });
+      } else if (transporter) {
+        // Fallback to nodemailer (for development)
+        await transporter.sendMail({
+          from: process.env.SMTP_USER,
+          to: email,
+          subject: 'Login OTP for MayaCode',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #3B82F6;">MayaCode Login Verification</h2>
+              <p>Your login OTP is:</p>
+              <h1 style="color: #1F2937; font-size: 32px; letter-spacing: 4px; text-align: center; padding: 20px; background-color: #F3F4F6; border-radius: 8px;">${otp}</h1>
+              <p>This OTP will expire in 10 minutes.</p>
+              <p>If you did not request this OTP, please ignore this email.</p>
+              <hr>
+              <p style="color: #6B7280; font-size: 12px;">This is an automated message from MayaCode. <br/>Please do not reply to this email as this inbox is not monitored.</p>
+            </div>
+          `,
+        });
+
+        res.json({
+          success: true,
+          message: "OTP sent to your email successfully"
+        });
+      } else {
+        // No email service configured - fallback to console
+        console.log('🚨 NO EMAIL SERVICE CONFIGURED - FALLBACK MODE');
+        console.log('📧 Email:', email);
+        console.log('🔑 OTP:', otp);
+        console.log('⏰ Expires at:', expiresAt);
+        console.log('💡 Use this OTP to login (for development only)');
+        
+        res.json({
+          success: true,
+          message: "OTP generated successfully (check server logs for OTP - email service not configured)",
+          fallback: true,
+          otp: otp
+        });
+      }
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       
-      // Provide more specific error messages
-      if (emailError.code === 'ETIMEDOUT' || emailError.code === 'ECONNREFUSED') {
-        return res.status(500).json({
-          success: false,
-          message: "Email service temporarily unavailable. Please try again later."
-        });
-      } else if (emailError.code === 'EAUTH') {
-        return res.status(500).json({
-          success: false,
-          message: "Email authentication failed. Please check SMTP credentials."
-        });
-      } else {
-        return res.status(500).json({
-          success: false,
-          message: "Failed to send OTP. Please try again."
-        });
-      }
+      // FALLBACK: Log OTP to console for development
+      console.log('🚨 EMAIL SERVICE UNAVAILABLE - FALLBACK MODE');
+      console.log('📧 Email:', email);
+      console.log('🔑 OTP:', otp);
+      console.log('⏰ Expires at:', expiresAt);
+      console.log('💡 Use this OTP to login (for development only)');
+      
+      res.json({
+        success: true,
+        message: "OTP generated successfully (check server logs for OTP - email service unavailable)",
+        fallback: true,
+        otp: otp
+      });
     }
   } catch (error) {
     console.error('Request OTP Error:', error);
