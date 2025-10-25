@@ -8,37 +8,40 @@ require("dotenv").config()
 const PORT = process.env.PORT || 8000;
 const server = http.createServer(app);
 
-// Initialize Kafka and start services
+// Initialize services with fallback for Kafka/Redis
 async function initializeServices() {
   try {
-    console.log("🚀 Initializing MayaCode Chat Services...");
+    console.log("🚀 Initializing MayaCode Services...");
     
-    // Initialize Kafka producer
-    await initializeProducer();
+    // Try to initialize Kafka (with fallback)
+    try {
+      await initializeProducer();
+      await initializeConsumer();
+      await kafkaConsumerService.startConsuming();
+      
+      const messageService = require("./services/messageService");
+      messageService.startBufferFlushing();
+      
+      console.log("✅ Kafka services initialized successfully");
+    } catch (kafkaError) {
+      console.log("⚠️ Kafka services unavailable, continuing without them...");
+      console.log("💡 To enable Kafka: Create topics 'chat-messages' and 'message-persistence'");
+    }
     
-    // Initialize Kafka consumer
-    await initializeConsumer();
-    
-    // Start Kafka consumer service
-    await kafkaConsumerService.startConsuming();
-    
-    // Start message service buffer flushing
-    const messageService = require("./services/messageService");
-    messageService.startBufferFlushing();
-    
-    console.log("✅ All services initialized successfully");
+    console.log("✅ Core services initialized");
     console.log("📧 Email OTP Authentication is ready!");
     console.log("🔗 Test endpoints:");
     console.log("   POST /auth/request-otp");
     console.log("   POST /auth/verify-otp");
     console.log("   GET /auth/verify-token");
     
-    // Setup socket after services are ready
+    // Setup socket (will work even without Redis)
     setupSocket(server);
     
   } catch (error) {
     console.error("❌ Failed to initialize services:", error);
-    process.exit(1);
+    // Don't exit, let authentication work
+    console.log("⚠️ Continuing with limited functionality...");
   }
 }
 
