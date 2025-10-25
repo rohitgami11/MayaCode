@@ -5,21 +5,44 @@ const UserProfile = require('../models/User');
 
 const OTP_EXPIRY_MINUTES = 10;
 
-// Configure nodemailer with better error handling and fallback
+// Configure nodemailer with multiple email service options
 const createTransporter = () => {
   try {
-    // Try Gmail first
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      // Add timeout and connection settings
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    });
+    // Try SendGrid first (works better with hosting services)
+    if (process.env.SENDGRID_API_KEY) {
+      return nodemailer.createTransport({
+        service: 'SendGrid',
+        auth: {
+          user: 'apikey',
+          pass: process.env.SENDGRID_API_KEY,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+      });
+    }
+    
+    // Fallback to Gmail if SendGrid not available
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+    }
+    
+    console.warn('No email service configured');
+    return null;
   } catch (error) {
     console.error('Failed to create SMTP transporter:', error);
     return null;
@@ -66,87 +89,132 @@ const checkEmailInUse = async (req, res) => {
 };
 
 const requestOtp = async (req, res) => {
-  const { email } = req.body;
-  
-  if (!email) {
-    return res.status(400).json({ message: 'Email is required' });
-  }
-
   try {
+    const { email } = req.body;
+
+    // Basic email validation
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address"
+      });
+    }
+
+    // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60000);
-    
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Save OTP to database
     await Otp.findOneAndUpdate(
       { email: email.toLowerCase() },
       { otp, expiresAt },
       { upsert: true, new: true }
     );
-    
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: email,
-      subject: 'Login OTP for MayaCode',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #3B82F6;">MayaCode Login Verification</h2>
-          <p>Your login OTP is:</p>
-          <h1 style="color: #1F2937; font-size: 32px; letter-spacing: 4px; text-align: center; padding: 20px; background-color: #F3F4F6; border-radius: 8px;">${otp}</h1>
-          <p>This OTP will expire in 10 minutes.</p>
-          <p>If you did not request this OTP, please ignore this email.</p>
-          <hr>
-          <p style="color: #6B7280; font-size: 12px;">This is an automated message from MayaCode. <br/>Please do not reply to this email as this inbox is not monitored.</p>
-        </div>
-      `,
-    });
-    
-    res.json({ message: 'OTP sent to email' });
-  } catch (err) {
-    console.error('requestOtp error:', err);
-    
-    // Provide more specific error messages
-    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
-      return res.status(500).json({ 
-        message: 'Email service temporarily unavailable. Please try again later.',
-        error: 'SMTP_CONNECTION_FAILED'
-      });
-    } else if (err.code === 'EAUTH') {
-      return res.status(500).json({ 
-        message: 'Email authentication failed. Please check SMTP credentials.',
-        error: 'SMTP_AUTH_FAILED'
-      });
-    } else {
-      return res.status(500).json({ 
-        message: 'Failed to send OTP. Please try again.',
-        error: 'UNKNOWN_ERROR'
+
+    // Check if transporter is available
+    if (!transporter) {
+      console.error('No email transporter configured');
+      return res.status(500).json({
+        success: false,
+        message: "Email service not configured. Please contact support."
       });
     }
+
+    // Send OTP via email
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_USER,
+        to: email,
+        subject: 'Login OTP for MayaCode',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #3B82F6;">MayaCode Login Verification</h2>
+            <p>Your login OTP is:</p>
+            <h1 style="color: #1F2937; font-size: 32px; letter-spacing: 4px; text-align: center; padding: 20px; background-color: #F3F4F6; border-radius: 8px;">${otp}</h1>
+            <p>This OTP will expire in 10 minutes.</p>
+            <p>If you did not request this OTP, please ignore this email.</p>
+            <hr>
+            <p style="color: #6B7280; font-size: 12px;">This is an automated message from MayaCode. <br/>Please do not reply to this email as this inbox is not monitored.</p>
+          </div>
+        `,
+      });
+
+      res.json({
+        success: true,
+        message: "OTP sent to your email successfully"
+      });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      
+      // Provide more specific error messages
+      if (emailError.code === 'ETIMEDOUT' || emailError.code === 'ECONNREFUSED') {
+        return res.status(500).json({
+          success: false,
+          message: "Email service temporarily unavailable. Please try again later."
+        });
+      } else if (emailError.code === 'EAUTH') {
+        return res.status(500).json({
+          success: false,
+          message: "Email authentication failed. Please check SMTP credentials."
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send OTP. Please try again."
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Request OTP Error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };
 
 const verifyOtp = async (req, res) => {
-  const { email, otp, verifyOnly } = req.body;
-  
-  if (!email || !otp) {
-    return res.status(400).json({ message: 'Email and OTP are required' });
-  }
-
   try {
-    // Check OTP from database
-    const record = await Otp.findOne({ email: email.toLowerCase() });
-    if (!record || record.otp !== otp || record.expiresAt < new Date()) {
-      return res.status(400).json({ message: 'Invalid or expired OTP' });
-    }
-    
-    // If verifyOnly is true, just return success without creating account
-    if (verifyOnly) {
-      return res.json({ 
-        message: 'Email verified successfully',
-        email: email,
-        verified: true,
-        status: 'success'
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required"
       });
     }
-    
+
+    // Find OTP in database
+    const otpRecord = await Otp.findOne({ email: email.toLowerCase() });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: "No OTP found for this email"
+      });
+    }
+
+    // Check if OTP is expired
+    if (new Date() > otpRecord.expiresAt) {
+      await Otp.deleteOne({ email: email.toLowerCase() });
+      return res.status(400).json({
+        success: false,
+        message: "OTP has expired. Please request a new one."
+      });
+    }
+
+    // Verify OTP
+    if (otpRecord.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP"
+      });
+    }
+
+    // Delete OTP after successful verification
+    await Otp.deleteOne({ email: email.toLowerCase() });
+
+    // Check if user exists, if not create one
     let user = await UserProfile.findOne({ email: email.toLowerCase() });
     
     if (!user) {
@@ -163,15 +231,12 @@ const verifyOtp = async (req, res) => {
         console.log('User created successfully:', user._id);
       } catch (createError) {
         console.error('User creation error:', createError);
-        return res.status(500).json({ 
-          message: 'Account creation failed. Please contact support.',
-          error: 'User creation validation failed'
+        return res.status(500).json({
+          success: false,
+          message: "Account creation failed. Please contact support."
         });
       }
     }
-    
-    // Delete the used OTP
-    await Otp.deleteOne({ email: email.toLowerCase() });
     
     const token = jwt.sign(
       { email: user.email, id: user._id },
@@ -179,18 +244,23 @@ const verifyOtp = async (req, res) => {
       { expiresIn: '7d' }
     );
     
-    return res.json({ 
+    return res.json({
+      success: true,
+      message: "Email verified successfully",
+      token: token,
       user: { 
         email: user.email, 
         id: user._id,
         name: user.name,
         userType: user.userType
-      }, 
-      token
+      }
     });
-  } catch (err) {
-    console.error('verifyOtp error:', err);
-    res.status(500).json({ message: 'OTP verification failed' });
+  } catch (error) {
+    console.error('Verify OTP Error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };
 
