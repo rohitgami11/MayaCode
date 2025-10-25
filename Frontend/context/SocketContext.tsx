@@ -35,6 +35,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   const connectSocket = useCallback(() => {
     if (!socket) {
+      console.log("[Socket] Connecting to:", process.env.EXPO_PUBLIC_BASE_URL);
       const _socket = io(process.env.EXPO_PUBLIC_BASE_URL, {
         autoConnect: true,
         reconnection: true,
@@ -55,6 +56,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       });
       _socket.on("error", (err) => {
         console.log("[Socket] Error", err);
+        console.error("Full socket error details:", {
+          message: err?.message,
+          description: (err as any)?.description,
+          context: (err as any)?.context,
+          type: (err as any)?.type,
+          transport: (err as any)?.transport,
+          url: process.env.EXPO_PUBLIC_BASE_URL
+        });
         setConnectionStatus('error');
         if (Toast && Toast.show) {
           Toast.show({ type: 'error', text1: 'Socket Error', text2: err?.message || String(err) });
@@ -62,6 +71,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       });
       _socket.on("connect_error", (err) => {
         console.log("[Socket] Connect Error", err);
+        console.error("Full socket connect error details:", {
+          message: err?.message,
+          description: (err as any)?.description,
+          context: (err as any)?.context,
+          type: (err as any)?.type,
+          transport: (err as any)?.transport,
+          url: process.env.EXPO_PUBLIC_BASE_URL
+        });
         setConnectionStatus('error');
         if (Toast && Toast.show) {
           Toast.show({ type: 'error', text1: 'Socket Connect Error', text2: err?.message || String(err) });

@@ -38,7 +38,7 @@ export default function ProfileScreen() {
     
     try {
       const newProfile = await userService.updateUserProfile({
-        name: user.name || user.phone,
+        name: user.name || user.email,
         userType: 'Other',
         languages: [],
         createdStories: [],
@@ -67,9 +67,9 @@ export default function ProfileScreen() {
       if (user) {
         setIsLoadingProfile(true);
         try {
-          // Check if phone number exists in Appwrite session
-          if (!user.phone) {
-            console.log('No phone number found in Appwrite session');
+          // Check if email exists in user session
+          if (!user.email) {
+            console.log('No email found in user session');
             router.replace('/login');
             return;
           }
@@ -145,7 +145,7 @@ export default function ProfileScreen() {
                <Ionicons name="person" size={80} color="#fff" />
              )}
           </View>
-          <Text style={styles.userName}>{userProfile?.name || user.phone}</Text>
+          <Text style={styles.userName}>{userProfile?.name || user.email}</Text>
         </View>
 
         <View style={styles.tabsContainer}>

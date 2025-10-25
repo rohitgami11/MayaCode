@@ -6,7 +6,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Backend API Configuration
-const API_BASE_URL = 'http://localhost:8000'; // Backend server URL
+const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
 // Define types
 export interface User {
@@ -93,26 +93,68 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsSendingOtp(true);
     try {
       console.log('Sending OTP to:', email);
+      console.log('Using API URL:', API_BASE_URL);
+      console.log('Full request URL:', `${API_BASE_URL.replace('/api', '')}/auth/request-otp`);
+      
+      // Skip health check for now - go directly to OTP request
+      console.log('Attempting OTP request...');
 
-      const response = await axios.post(`${API_BASE_URL}/auth/request-otp`, {
+      const response = await axios.post(`${API_BASE_URL.replace('/api', '')}/auth/request-otp`, {
         email: email
+      }, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
       
-      if (response.data.message === 'OTP sent to email') {
-        Toast.show({
-          type: 'success',
-          text1: 'OTP Sent',
-          text2: 'Please enter the OTP sent to your email.',
-        });
+      if (response.data.success) {
+        if (response.data.fallback) {
+          // Development fallback - show OTP in console and toast
+          console.log('🔑 OTP for development:', response.data.otp);
+          Toast.show({
+            type: 'info',
+            text1: 'OTP Generated',
+            text2: `Development mode: OTP is ${response.data.otp}`,
+          });
+        } else {
+          Toast.show({
+            type: 'success',
+            text1: 'OTP Sent',
+            text2: 'Please enter the OTP sent to your email.',
+          });
+        }
         return true;
       }
       return false;
     } catch (error: any) {
       console.error("Error sending OTP:", error);
+      console.error("Full error details:", {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
+      
+      let errorMessage = 'Please check your email and try again.';
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please check your internet connection and try again.';
+      } else if (error.message === 'Network Error') {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       Toast.show({
         type: 'error',
         text1: 'Failed to send OTP',
-        text2: error.response?.data?.message || 'Please check your email and try again.',
+        text2: errorMessage,
       });
       return false;
     } finally {
@@ -125,12 +167,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log(`Verifying OTP for email: ${email}`);
       
-      const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
+      const response = await axios.post(`${API_BASE_URL.replace('/api', '')}/auth/verify-otp`, {
         email: email,
         otp: otp
+      }, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
       
-      if (response.data.token && response.data.user) {
+      if (response.data.success && response.data.token && response.data.user) {
         // Store token and user data
         await AsyncStorage.setItem('authToken', response.data.token);
         setToken(response.data.token);
@@ -149,10 +197,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return false;
     } catch (error: any) {
       console.error("Error verifying OTP:", error);
+      console.error("Full error details:", {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
       Toast.show({
         type: 'error',
         text1: 'Invalid OTP',
-        text2: error.response?.data?.message || 'Please check the OTP and try again.',
+        text2: error.response?.data?.message || error.message || 'Please check the OTP and try again.',
       });
       return false;
     } finally {

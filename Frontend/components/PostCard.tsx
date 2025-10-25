@@ -17,7 +17,8 @@ const PostCard: React.FC<PostCardProps> = ({
   onEdit,
 }) => {
   const { user } = useAuth();
-  const isMyPost = user?.phone === post.phone;
+  // Check if this is the current user's post
+  const isMyPost = user?.email === post.email;
 
   const handleDelete = () => {
     Alert.alert(

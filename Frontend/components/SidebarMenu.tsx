@@ -161,7 +161,7 @@ export default function SidebarMenu({ isOpen, onClose }: SidebarMenuProps) {
               <Ionicons name="person-circle-outline" size={40} color="#4a5568" style={{ marginRight: 12 }} />
               <TouchableOpacity onPress={() => handleNavigation("/profile")}>
                 <Text className="text-lg font-semibold text-gray-800">
-                  {isLoading || isLoadingProfile ? 'Loading...' : userProfile?.name || user?.phone || 'Profile'}
+                  {isLoading || isLoadingProfile ? 'Loading...' : userProfile?.name || user?.email || 'Profile'}
                 </Text>
               </TouchableOpacity>
             </View>

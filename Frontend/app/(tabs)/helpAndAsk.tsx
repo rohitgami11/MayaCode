@@ -62,7 +62,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim() || !user?.phone) {
+    if (!title.trim() || !content.trim() || !user?.email) {
       Alert.alert(
         'Missing Information',
         'Please provide title, content, and ensure you are logged in.',
@@ -83,7 +83,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
     setIsLoading(true);
     try {
       const newPost = await postService.createPost(
-        user.phone,
+        user.email,
         postType,
         title.trim(),
         content.trim(),
@@ -332,7 +332,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
                     Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
                   </Text>
                 )}
-                {selectedPost.phone ? <Text style={styles.postDetailAuthor}>By: {selectedPost.phone}</Text> : null}
+                {selectedPost.email ? <Text style={styles.postDetailAuthor}>By: {selectedPost.email}</Text> : null}
                 <Text style={styles.postDetailDate}>
                   Created: {new Date(selectedPost.createdAt).toLocaleDateString()}
                 </Text>
@@ -487,7 +487,7 @@ export default function HelpAndAsk() {
                     Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
                   </Text>
                 )}
-                {selectedPost.phone ? <Text style={styles.postDetailAuthor}>By: {selectedPost.phone}</Text> : null}
+                {selectedPost.email ? <Text style={styles.postDetailAuthor}>By: {selectedPost.email}</Text> : null}
                 <Text style={styles.postDetailDate}>
                   Created: {new Date(selectedPost.createdAt).toLocaleDateString()}
                 </Text>
