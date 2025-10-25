@@ -15,9 +15,13 @@ const messageRoutes = require("./routes/messageRoutes.js");
 require("dotenv").config()
 
 // Set environment variables if not already set
-process.env.SMTP_USER = process.env.SMTP_USER || 'rohitgami2003@gmail.com';
-process.env.SMTP_PASS = process.env.SMTP_PASS || 'lfxcczjulqajfxxh';
-process.env.JWT_SECRET_VERIFY = process.env.JWT_SECRET_VERIFY || '8d4e0de1dc4adfkbmf919d3328394d15c96ca';
+process.env.JWT_SECRET_VERIFY = process.env.JWT_SECRET_VERIFY;
+
+// SMTP credentials should be set via environment variables
+if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  console.warn('⚠️ SMTP credentials not set. Email functionality will not work.');
+  console.warn('Please set SMTP_USER and SMTP_PASS environment variables.');
+}
 
 connectDB();
 
@@ -41,6 +45,21 @@ app.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "MayaCode Backend is running!", 
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      auth: "/auth",
+      posts: "/api/posts", 
+      users: "/api/users",
+      messages: "/api/messages"
+    }
+  });
+});
 
 // API routes
 app.use("/api/posts", postRoutes);

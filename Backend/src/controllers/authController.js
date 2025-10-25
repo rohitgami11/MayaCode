@@ -5,14 +5,28 @@ const UserProfile = require('../models/User');
 
 const OTP_EXPIRY_MINUTES = 10;
 
-// Configure nodemailer (use your SMTP credentials)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Configure nodemailer with better error handling and fallback
+const createTransporter = () => {
+  try {
+    // Try Gmail first
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      // Add timeout and connection settings
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+    });
+  } catch (error) {
+    console.error('Failed to create SMTP transporter:', error);
+    return null;
+  }
+};
+
+const transporter = createTransporter();
 
 // Check if email is already in use by another user
 const checkEmailInUse = async (req, res) => {
@@ -88,7 +102,24 @@ const requestOtp = async (req, res) => {
     res.json({ message: 'OTP sent to email' });
   } catch (err) {
     console.error('requestOtp error:', err);
-    res.status(500).json({ message: 'Failed to send OTP' });
+    
+    // Provide more specific error messages
+    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') {
+      return res.status(500).json({ 
+        message: 'Email service temporarily unavailable. Please try again later.',
+        error: 'SMTP_CONNECTION_FAILED'
+      });
+    } else if (err.code === 'EAUTH') {
+      return res.status(500).json({ 
+        message: 'Email authentication failed. Please check SMTP credentials.',
+        error: 'SMTP_AUTH_FAILED'
+      });
+    } else {
+      return res.status(500).json({ 
+        message: 'Failed to send OTP. Please try again.',
+        error: 'UNKNOWN_ERROR'
+      });
+    }
   }
 };
 
