@@ -1,4 +1,8 @@
 const Post = require('../models/Post');
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
 
 // Create a new post
 exports.createPost = async (req, res) => {
@@ -95,6 +99,23 @@ exports.getUserPosts = async (req, res) => {
     
     const posts = await Post.find({ phone }).sort({ createdAt: -1 });
     res.json(posts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get post images (lazy loading support)
+exports.getPostImages = async (req, res) => {
+  console.log(`HTTP ${req.method} ${req.url} - Get Post Images`, req.params);
+  try {
+    const { id } = req.params;
+    
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+    
+    res.json({ images: post.images || [] });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
