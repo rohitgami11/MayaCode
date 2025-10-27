@@ -12,19 +12,35 @@ export const postService = {
     content: string,
     data: Partial<Post> = {}
   ): Promise<Post | null> {
+    // Sanitize data for logging (truncate long base64 strings)
+    const logData = { ...data };
+    if (logData.images && Array.isArray(logData.images)) {
+      logData.images = logData.images.map((img: string) => 
+        img ? (img.substring(0, 50) + '... (base64 image data)') : 'null'
+      );
+    }
+    
     console.log('Starting createPost with:', {
       phone,
       type,
       title,
       content,
-      data,
+      data: logData,
       apiUrl: API_URL
     });
 
     try {
       console.log('Creating post object...');
       const post = createPost(phone, type, title, content, data);
-      console.log('Created post object:', post);
+      
+      // Sanitize post for logging
+      const logPost = { ...post };
+      if (logPost.images && Array.isArray(logPost.images)) {
+        logPost.images = logPost.images.map((img: string) => 
+          img ? (img.substring(0, 50) + '... (base64 image data)') : 'null'
+        );
+      }
+      console.log('Created post object:', logPost);
 
       console.log('Making API request to:', `${API_URL}/posts`);
       const response = await fetch(`${API_URL}/posts`, {

@@ -91,7 +91,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
         const base64Image = await convertImageToBase64(imageUri);
         if (base64Image) {
           images = [base64Image];
-          console.log('Converted image to base64 successfully');
+          console.log('Converted image to base64 successfully - backend will compress');
         } else {
           console.error('Failed to convert image to base64');
           Alert.alert('Error', 'Failed to process image. Please try again.');
@@ -361,7 +361,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
                       style={[styles.postDetailImage, (!imageLoaded || imageError) && { opacity: 0 }]}
                       resizeMode="cover"
                       onLoadStart={() => {
-                        console.log('Starting to load image:', selectedPost?.images?.[0]);
+                        console.log('Starting to load image:', selectedPost?.images?.[0] ? 'Image exists' : 'No image');
                         setImageLoaded(false);
                         setImageError(false);
                       }}
@@ -433,7 +433,7 @@ export default function HelpAndAsk() {
   // Function to handle marker press
   const handleMarkerPress = (post: Post) => {
     console.log('Marker pressed for post:', post.title); // Debug log
-    console.log('Post images:', post.images); // Debug log
+    console.log('Post images:', post.images?.length || 0, 'image(s)'); // Debug log
     setSelectedPost(post);
     setIsPostDetailVisible(true);
     setImageLoaded(false);
@@ -568,7 +568,7 @@ export default function HelpAndAsk() {
                       style={[styles.postDetailImage, (!imageLoaded || imageError) && { opacity: 0 }]}
                       resizeMode="cover"
                       onLoadStart={() => {
-                        console.log('Starting to load image:', selectedPost?.images?.[0]);
+                        console.log('Starting to load image:', selectedPost?.images?.[0] ? 'Image exists' : 'No image');
                         setImageLoaded(false);
                         setImageError(false);
                       }}

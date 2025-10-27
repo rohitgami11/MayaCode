@@ -40,17 +40,23 @@ export const getImageSourceWithFallback = (category: string, number: number) => 
 
 /**
  * Convert local image file URI to base64
+ * Backend will handle compression
  * @param uri - Local file URI
  * @returns Base64 encoded string
  */
 export const convertImageToBase64 = async (uri: string): Promise<string | null> => {
   try {
-    console.log('Converting image to base64:', uri);
+    console.log('Converting image to base64:', uri ? 'Image URI exists' : 'No URI');
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
+    
     // Add data URI prefix for React Native Image component
-    return `data:image/jpeg;base64,${base64}`;
+    const result = `data:image/jpeg;base64,${base64}`;
+    const sizeInMB = (result.length * 3 / 4) / (1024 * 1024);
+    console.log('Original image size:', sizeInMB.toFixed(2), 'MB');
+    
+    return result;
   } catch (error) {
     console.error('Error converting image to base64:', error);
     return null;
