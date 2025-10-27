@@ -19,6 +19,12 @@ exports.createPost = async (req, res) => {
     res.status(201).json(post);
   } catch (error) {
     console.error('Error creating post:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      errors: error.errors
+    });
     if (error.name === 'ValidationError') {
       res.status(400).json({ message: error.message });
     } else {
