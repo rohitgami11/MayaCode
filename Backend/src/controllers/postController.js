@@ -6,7 +6,13 @@ const http = require('http');
 
 // Create a new post
 exports.createPost = async (req, res) => {
-  console.log(`HTTP ${req.method} ${req.url} - Create Post`, req.body);
+  const logBody = { ...req.body };
+  if (logBody.images) {
+    logBody.images = logBody.images.map((img) => 
+      img ? (img.substring(0, 50) + '... (base64 image data)') : 'null'
+    );
+  }
+  console.log(`HTTP ${req.method} ${req.url} - Create Post`, logBody);
   try {
     const post = new Post(req.body);
     await post.save();
