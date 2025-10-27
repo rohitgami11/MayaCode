@@ -11,6 +11,7 @@ const postRoutes = require("./routes/postRoutes.js");
 const userRoutes = require("./routes/userRoutes.js");
 const authRoutes = require("./routes/authRoutes.js");
 const messageRoutes = require("./routes/messageRoutes.js");
+const imageRoutes = require("./routes/imageRoutes.js");
 
 require("dotenv").config()
 
@@ -26,10 +27,14 @@ if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
 connectDB();
 
 const app = express();
+const path = require('path');
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Serve static files from public directory
+app.use('/public', express.static(path.join(__dirname, '..', 'public')));
 
 app.use((req, res, next) => {
   next();
@@ -56,7 +61,8 @@ app.get("/", (req, res) => {
       auth: "/auth",
       posts: "/api/posts", 
       users: "/api/users",
-      messages: "/api/messages"
+      messages: "/api/messages",
+      images: "/api/images"
     }
   });
 });
@@ -66,6 +72,7 @@ app.use("/api/posts", postRoutes);
 app.use("/api/users", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/images", imageRoutes);
 
 // Error middleware
 app.use(errorHandler);
