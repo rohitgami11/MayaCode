@@ -76,6 +76,13 @@ app.get("/", (req, res) => {
   });
 });
 
+// Test endpoint to verify backend is receiving requests
+app.post("/api/test", (req, res) => {
+  console.log("🧪 TEST ENDPOINT HIT!");
+  console.log("Request body:", req.body);
+  res.json({ message: "Test endpoint working!", received: req.body });
+});
+
 // API routes
 app.use("/api/posts", postRoutes);
 app.use("/api/users", userRoutes);

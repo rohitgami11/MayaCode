@@ -4,6 +4,8 @@ const postController = require('../controllers/postController');
 
 // Add detailed logging middleware
 router.use((req, res, next) => {
+  console.log(`📨 POST ROUTE: ${req.method} ${req.url}`);
+  console.log('Request headers:', req.headers);
   next();
 });
 
