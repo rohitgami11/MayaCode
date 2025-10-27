@@ -1,5 +1,3 @@
-const cloudinary = require('../config/cloudinary');
-
 /**
  * Upload base64 image to Cloudinary as-is
  * @param {string} base64Image - Base64 encoded image with data URI prefix
@@ -7,7 +5,9 @@ const cloudinary = require('../config/cloudinary');
  */
 async function uploadImageToCloudinary(base64Image) {
   try {
-    console.log('Uploading image to Cloudinary...');
+    const cloudinary = require('../config/cloudinary');
+    console.log('📤 Uploading single image to Cloudinary...');
+    console.log('Base64 length:', base64Image.length);
     
     // Upload directly to Cloudinary
     const result = await cloudinary.uploader.upload(base64Image, {
@@ -15,10 +15,14 @@ async function uploadImageToCloudinary(base64Image) {
       folder: 'mayacode-posts',
     });
     
-    console.log('Image uploaded to Cloudinary:', result.secure_url);
+    console.log('✅ Image uploaded to Cloudinary:', result.secure_url);
+    console.log('Image public_id:', result.public_id);
+    console.log('Image bytes:', result.bytes);
     return result.secure_url;
   } catch (error) {
-    console.error('Error uploading image to Cloudinary:', error);
+    console.error('❌ Error uploading image to Cloudinary:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     throw error;
   }
 }
@@ -36,13 +40,14 @@ async function uploadImagesToCloudinary(images) {
   const uploadedUrls = [];
   
   for (let i = 0; i < images.length; i++) {
-    console.log(`Uploading image ${i + 1}/${images.length} to Cloudinary...`);
+    console.log(`📤 Uploading image ${i + 1}/${images.length} to Cloudinary...`);
     try {
       const url = await uploadImageToCloudinary(images[i]);
       uploadedUrls.push(url);
+      console.log(`✅ Image ${i + 1} uploaded successfully`);
     } catch (error) {
-      console.error(`Error uploading image ${i + 1}:`, error);
-      // Skip the image if upload fails
+      console.error(`❌ Error uploading image ${i + 1}:`, error);
+      throw error; // Don't skip - throw to caller
     }
   }
   

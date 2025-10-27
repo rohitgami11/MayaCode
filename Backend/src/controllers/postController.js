@@ -17,17 +17,38 @@ exports.createPost = async (req, res) => {
   try {
     // Upload images to Cloudinary and replace base64 with URLs
     let body = { ...req.body };
+    console.log('Post body before processing:', JSON.stringify({
+      ...body,
+      images: body.images ? `[${body.images.length} image(s)]` : 'none'
+    }));
+    
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
-      console.log('Uploading images to Cloudinary...');
-      body.images = await uploadImagesToCloudinary(body.images);
-      console.log('Images uploaded successfully');
+      console.log('🖼️ Starting image upload to Cloudinary...');
+      console.log('Number of images:', body.images.length);
+      
+      try {
+        body.images = await uploadImagesToCloudinary(body.images);
+        console.log('✅ Images uploaded successfully to Cloudinary');
+        console.log('Cloudinary URLs:', body.images);
+      } catch (uploadError) {
+        console.error('❌ Error uploading to Cloudinary:', uploadError);
+        console.error('Upload error details:', {
+          message: uploadError.message,
+          stack: uploadError.stack
+        });
+        throw uploadError;
+      }
+    } else {
+      console.log('ℹ️ No images to upload');
     }
     
+    console.log('📝 Creating post in MongoDB...');
     const post = new Post(body);
     await post.save();
+    console.log('✅ Post created successfully in MongoDB');
     res.status(201).json(post);
   } catch (error) {
-    console.error('Error creating post:', error);
+    console.error('❌ Error creating post:', error);
     console.error('Error details:', {
       name: error.name,
       message: error.message,
