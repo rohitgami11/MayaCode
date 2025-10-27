@@ -33,8 +33,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Serve static files from public directory
-app.use('/public', express.static(path.join(__dirname, '..', 'public')));
+// Serve static files from public directory with optimized headers
+app.use('/public', express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      // Set aggressive caching for images
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('ETag', require('crypto').createHash('md5').update(filePath).digest('hex'));
+    }
+  },
+  maxAge: '1y' // Browser cache for 1 year
+}));
 
 app.use((req, res, next) => {
   next();
