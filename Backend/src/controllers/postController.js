@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
+const { uploadImagesToCloudinary } = require('../utils/cloudinaryUploader');
 
 // Create a new post
 exports.createPost = async (req, res) => {
@@ -14,7 +15,15 @@ exports.createPost = async (req, res) => {
   }
   console.log(`HTTP ${req.method} ${req.url} - Create Post`, logBody);
   try {
-    const post = new Post(req.body);
+    // Upload images to Cloudinary and replace base64 with URLs
+    let body = { ...req.body };
+    if (body.images && Array.isArray(body.images) && body.images.length > 0) {
+      console.log('Uploading images to Cloudinary...');
+      body.images = await uploadImagesToCloudinary(body.images);
+      console.log('Images uploaded successfully');
+    }
+    
+    const post = new Post(body);
     await post.save();
     res.status(201).json(post);
   } catch (error) {

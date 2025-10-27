@@ -5,6 +5,9 @@ const { initializeProducer, initializeConsumer } = require("./config/kafka");
 const kafkaConsumerService = require("./services/kafkaConsumer");
 require("dotenv").config()
 
+// Initialize Cloudinary
+require("./config/cloudinary");
+
 const PORT = process.env.PORT || 8000;
 const server = http.createServer(app);
 
