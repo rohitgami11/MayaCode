@@ -15,7 +15,7 @@ export default function Header() {
     >
       <View className="flex-row items-center">
         <Image 
-           source={require('@/assets/images/MayaCode-logo.png')}
+           source={require('@/assets/MayaCode-logo.png')}
            style={{ width: 30, height: 30, marginRight: 8 }}
          />
         <Text className="text-xl font-bold text-[#2C3E50]">MayaCode</Text>

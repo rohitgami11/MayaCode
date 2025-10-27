@@ -1,6 +1,6 @@
 import { createPost, Post, updatePost } from '@/models/Post';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = `${process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000'}/api`;
 
 // Post Operations
 export const postService = {

@@ -137,19 +137,24 @@ const Stories = () => {
 
   const handleWriteStory = () => {
     if (!user?.email) {
-      console.log('No phone number found in user session:', user);
+      console.log('No email found in user session:', user);
       Toast.show({
         type: 'error',
         text1: 'Authentication Required',
-        text2: 'Please sign in to write a story.',
+        text2: 'Please sign in to write a story. Redirecting to login...',
         position: 'top',
-        visibilityTime: 4000,
+        visibilityTime: 2000,
         autoHide: true,
         topOffset: 50,
         onPress: () => {
-          console.log('Toast pressed');
+          console.log('Toast pressed, redirecting to login');
+          router.push('/login');
         },
       });
+      // Redirect to login page after a short delay
+      setTimeout(() => {
+        router.push('/login');
+      }, 500);
       return;
     }
     router.push('/create-story');

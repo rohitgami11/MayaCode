@@ -27,7 +27,7 @@ export default function SidebarMenu({ isOpen, onClose }: SidebarMenuProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const translateX = React.useRef(new Animated.Value(-width)).current;
+  const translateX = React.useRef(new Animated.Value(width)).current; // Start from right (positive value)
   const segments = useSegments();
   const { user, isLoading, signOut } = useAuth();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -57,7 +57,7 @@ export default function SidebarMenu({ isOpen, onClose }: SidebarMenuProps) {
 
   React.useEffect(() => {
     Animated.timing(translateX, {
-      toValue: isOpen ? 0 : -width,
+      toValue: isOpen ? 0 : width, // Slide in from right (positive to 0)
       duration: 300,
       useNativeDriver: true,
     }).start();
@@ -100,7 +100,7 @@ export default function SidebarMenu({ isOpen, onClose }: SidebarMenuProps) {
         style={{
           position: 'absolute',
           top: 0,
-          left: 0,
+          right: 0, // Changed from left: 0 to right: 0
           bottom: 0,
           width: width * 0.75,
           backgroundColor: '#e8f5e9',
@@ -108,17 +108,17 @@ export default function SidebarMenu({ isOpen, onClose }: SidebarMenuProps) {
           zIndex: 2,
           elevation: 5,
           shadowColor: '#000',
-          shadowOffset: { width: 2, height: 0 },
+          shadowOffset: { width: -2, height: 0 }, // Negative offset for right side shadow
           shadowOpacity: 0.25,
           shadowRadius: 3.84,
-          borderTopRightRadius: 20,
-          borderBottomRightRadius: 20,
+          borderTopLeftRadius: 20, // Changed from borderTopRightRadius
+          borderBottomLeftRadius: 20, // Changed from borderBottomRightRadius
         }}
       >
         <View style={{ padding: 20, flex: 1 }}>
           <View className="flex-row items-center mb-8">
             <Image 
-              source={require('@/assets/images/commu-logo.png')}
+              source={require('@/assets/MayaCode-logo.png')}
               style={{ width: 40, height: 40, marginRight: 10 }} 
             />
             <Text className="text-xl font-bold text-gray-800">MayaCode</Text>

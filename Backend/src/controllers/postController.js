@@ -12,7 +12,12 @@ exports.createPost = async (req, res) => {
     await post.save();
     res.status(201).json(post);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error creating post:', error);
+    if (error.name === 'ValidationError') {
+      res.status(400).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: error.message || 'Something went wrong!' });
+    }
   }
 };
 

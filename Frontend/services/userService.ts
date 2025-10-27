@@ -1,6 +1,6 @@
 import { UserProfile } from '@/models/User';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000/api';
+const API_URL = `${process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000'}/api`;
 
 // Helper function to get auth token from AsyncStorage
 const getAuthToken = async (): Promise<string | null> => {

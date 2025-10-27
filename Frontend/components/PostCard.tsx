@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Post } from '@/models/Post';
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import Toast from 'react-native-toast-message';
 interface PostCardProps {
   post: Post;
   onDelete?: (postId: string) => void;
-  onEdit?: (post: Post) => void; // Placeholder for edit
+  onEdit?: (post: Post) => void;
 }
 
 const PostCard: React.FC<PostCardProps> = ({
@@ -17,8 +17,17 @@ const PostCard: React.FC<PostCardProps> = ({
   onEdit,
 }) => {
   const { user } = useAuth();
-  // Check if this is the current user's post
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [hasImages, setHasImages] = useState(false);
+  
   const isMyPost = user?.email === post.email;
+  
+  useEffect(() => {
+    if (post.images && post.images.length > 0 && post.images[0]) {
+      setHasImages(true);
+    }
+  }, [post.images]);
 
   const handleDelete = () => {
     Alert.alert(
@@ -31,21 +40,33 @@ const PostCard: React.FC<PostCardProps> = ({
     );
   };
 
-  // Placeholder for edit action
-  // Placeholder for edit action
-  // Placeholder for edit action
-  const handleAccess = () => {
-
-  };
-
   const handleEdit = () => {
     onEdit && onEdit(post);
   };
 
   return (
     <View style={styles.card}>
-      {post.images && post.images.length > 0 && post.images[0] && (
-        <Image source={{ uri: post.images[0] }} style={styles.image} resizeMode="cover" />
+      {hasImages && (
+        <View style={styles.imageContainer}>
+          {/* Empty frame background - shows while image loads */}
+          {!imageLoaded && !imageError && (
+            <View style={styles.imagePlaceholder} />
+          )}
+          {/* Error state - only show if image fails to load */}
+          {imageError && (
+            <View style={styles.imagePlaceholder}>
+              <Ionicons name="image-outline" size={48} color="#ccc" />
+            </View>
+          )}
+          {/* Image will fade in when loaded */}
+          <Image 
+            source={{ uri: post.images?.[0] }} 
+            style={[styles.image, (!imageLoaded || imageError) && { opacity: 0 }]}
+            resizeMode="cover"
+            onLoadEnd={() => setImageLoaded(true)}
+            onError={() => setImageError(true)}
+          />
+        </View>
       )}
       <Text style={styles.title}>{post.title}</Text>
       <Text style={styles.content}>{post.content}</Text>
@@ -80,11 +101,27 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  image: {
+  imageContainer: {
     width: '100%',
     height: 200,
     borderRadius: 8,
     marginBottom: 10,
+    position: 'relative',
+    backgroundColor: '#f0f0f0',
+    overflow: 'hidden',
+  },
+  imagePlaceholder: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  image: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
   },
   title: {
     fontSize: 18,
@@ -114,4 +151,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PostCard; 
+export default PostCard;

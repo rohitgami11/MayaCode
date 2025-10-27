@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, useColorScheme, View, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getImageSourceWithFallback } from '@/services/imageService';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -20,14 +21,14 @@ export default function HomeScreen() {
         <HelpPostCard
           title="Help posts"
           description="Ask and give help between community members and build lasting connections"
-          imageSource={require('@/assets/images/help-posts2.png')}
+          imageSource={getImageSourceWithFallback('help-posts', 2)}
           onPress={() => router.push('/helpAndAsk')}
         />
 
         <StoryCard
           title="Stories"
           description="Share your helping moments and inspire others to do more! Get inspired by others."
-          imageSource={require('@/assets/images/stories.png')}
+          imageSource={getImageSourceWithFallback('stories', 1)}
           onPress={() => router.push('/stories')}
         />
 
@@ -36,7 +37,7 @@ export default function HomeScreen() {
         {/* Static Inspirational Cards */}
         <View style={styles.inspirationalCard}>
           <Image 
-            source={require('@/assets/images/help-posts.png')} 
+            source={getImageSourceWithFallback('help-posts', 1)} 
             style={styles.inspirationalCardImage} 
             resizeMode="contain" 
           />
@@ -47,7 +48,7 @@ export default function HomeScreen() {
 
         <View style={styles.inspirationalCard}>
           <Image 
-            source={require('@/assets/images/help-posts3.png')} 
+            source={getImageSourceWithFallback('help-posts', 3)} 
             style={styles.inspirationalCardImage} 
             resizeMode="contain" 
           />
@@ -58,7 +59,7 @@ export default function HomeScreen() {
 
         <View style={styles.inspirationalCard}>
           <Image 
-            source={require('@/assets/images/help-posts4.png')} 
+            source={getImageSourceWithFallback('help-posts', 4)} 
             style={styles.inspirationalCardImage} 
             resizeMode="cover" 
           />
@@ -69,7 +70,7 @@ export default function HomeScreen() {
 
          <View style={styles.inspirationalCard}>
           <Image 
-            source={require('@/assets/images/unity.png')} 
+            source={getImageSourceWithFallback('unity', 1)} 
             style={styles.inspirationalCardImage} 
             resizeMode="cover" 
           />

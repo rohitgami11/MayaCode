@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import Toast from 'react-native-toast-message';
 import { postService } from '@/services/postService';
 import { PostType, Post } from '@/models/Post';
+import { convertImageToBase64 } from '@/services/imageService';
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -25,6 +26,8 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
   const [postType, setPostType] = useState<PostType>('Ask for Help');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isPostDetailVisible, setIsPostDetailVisible] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleImagePick = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -82,13 +85,28 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
 
     setIsLoading(true);
     try {
+      // Convert local image to base64 if present
+      let images: string[] | undefined = undefined;
+      if (imageUri) {
+        const base64Image = await convertImageToBase64(imageUri);
+        if (base64Image) {
+          images = [base64Image];
+          console.log('Converted image to base64 successfully');
+        } else {
+          console.error('Failed to convert image to base64');
+          Alert.alert('Error', 'Failed to process image. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const newPost = await postService.createPost(
         user.email,
         postType,
         title.trim(),
         content.trim(),
         {
-          images: imageUri ? [imageUri] : undefined,
+          images: images,
           location: {
             latitude: selectedLocation.latitude,
             longitude: selectedLocation.longitude
@@ -322,10 +340,43 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
                 <Text style={styles.postDetailType}>Type: {selectedPost.type}</Text>
                 <Text style={styles.postDetailContent}>{selectedPost.content}</Text>
                 {selectedPost.images && selectedPost.images.length > 0 && selectedPost.images[0] && (
-                  <Image 
-                    source={{ uri: selectedPost.images[0] }} 
-                    style={styles.postDetailImage}
-                  />
+                  <View style={styles.imageContainer}>
+                    {/* Empty frame background - shows while image loads */}
+                    {!imageLoaded && !imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <ActivityIndicator size="large" color="#007BFF" />
+                        <Text style={styles.placeholderText}>Loading image...</Text>
+                      </View>
+                    )}
+                    {/* Error state - only show if image fails to load */}
+                    {imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <Ionicons name="image-outline" size={48} color="#ccc" />
+                        <Text style={styles.placeholderText}>Image unavailable</Text>
+                      </View>
+                    )}
+                    {/* Image will fade in when loaded */}
+                    <Image 
+                      source={{ uri: selectedPost.images[0] }} 
+                      style={[styles.postDetailImage, (!imageLoaded || imageError) && { opacity: 0 }]}
+                      resizeMode="cover"
+                      onLoadStart={() => {
+                        console.log('Starting to load image:', selectedPost?.images?.[0]);
+                        setImageLoaded(false);
+                        setImageError(false);
+                      }}
+                      onLoadEnd={() => {
+                        console.log('Image loaded successfully');
+                        setImageLoaded(true);
+                        setImageError(false);
+                      }}
+                      onError={(error) => {
+                        console.error('Error loading image:', error.nativeEvent.error);
+                        setImageError(true);
+                        setImageLoaded(false);
+                      }}
+                    />
+                  </View>
                 )}
                 {selectedPost.location && (
                   <Text style={styles.postDetailLocation}>
@@ -353,6 +404,9 @@ export default function HelpAndAsk() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isPostDetailVisible, setIsPostDetailVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'ask' | 'offer'>('all');
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const openModal = () => setIsModalVisible(true);
   const closeModal = () => setIsModalVisible(false);
@@ -379,8 +433,12 @@ export default function HelpAndAsk() {
   // Function to handle marker press
   const handleMarkerPress = (post: Post) => {
     console.log('Marker pressed for post:', post.title); // Debug log
+    console.log('Post images:', post.images); // Debug log
     setSelectedPost(post);
     setIsPostDetailVisible(true);
+    setImageLoaded(false);
+    setImageError(false);
+    setImageLoading(false);
   };
 
   useEffect(() => {
@@ -391,11 +449,23 @@ export default function HelpAndAsk() {
     <View style={styles.container}>
       <Text style={styles.title}>Help & Ask</Text>
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => setActiveFilter('ask')}>
-          <Text style={styles.buttonText}>Needs help</Text>
+        <TouchableOpacity 
+          style={[styles.button, activeFilter === 'all' && styles.activeButton]} 
+          onPress={() => setActiveFilter('all')}
+        >
+          <Text style={[styles.buttonText, activeFilter === 'all' && styles.activeButtonText]}>All</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={() => setActiveFilter('offer')}>
-          <Text style={styles.buttonText}>Gives help</Text>
+        <TouchableOpacity 
+          style={[styles.button, activeFilter === 'ask' && styles.activeButton]} 
+          onPress={() => setActiveFilter('ask')}
+        >
+          <Text style={[styles.buttonText, activeFilter === 'ask' && styles.activeButtonText]}>Needs help</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.button, activeFilter === 'offer' && styles.activeButton]} 
+          onPress={() => setActiveFilter('offer')}
+        >
+          <Text style={[styles.buttonText, activeFilter === 'offer' && styles.activeButtonText]}>Gives help</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.mapContainer}>
@@ -477,10 +547,43 @@ export default function HelpAndAsk() {
                 <Text style={styles.postDetailType}>Type: {selectedPost.type}</Text>
                 <Text style={styles.postDetailContent}>{selectedPost.content}</Text>
                 {selectedPost.images && selectedPost.images.length > 0 && selectedPost.images[0] && (
-                  <Image 
-                    source={{ uri: selectedPost.images[0] }} 
-                    style={styles.postDetailImage}
-                  />
+                  <View style={styles.imageContainer}>
+                    {/* Empty frame background - shows while image loads */}
+                    {!imageLoaded && !imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <ActivityIndicator size="large" color="#007BFF" />
+                        <Text style={styles.placeholderText}>Loading image...</Text>
+                      </View>
+                    )}
+                    {/* Error state - only show if image fails to load */}
+                    {imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <Ionicons name="image-outline" size={48} color="#ccc" />
+                        <Text style={styles.placeholderText}>Image unavailable</Text>
+                      </View>
+                    )}
+                    {/* Image will fade in when loaded */}
+                    <Image 
+                      source={{ uri: selectedPost.images[0] }} 
+                      style={[styles.postDetailImage, (!imageLoaded || imageError) && { opacity: 0 }]}
+                      resizeMode="cover"
+                      onLoadStart={() => {
+                        console.log('Starting to load image:', selectedPost?.images?.[0]);
+                        setImageLoaded(false);
+                        setImageError(false);
+                      }}
+                      onLoadEnd={() => {
+                        console.log('Image loaded successfully');
+                        setImageLoaded(true);
+                        setImageError(false);
+                      }}
+                      onError={(error) => {
+                        console.error('Error loading image:', error.nativeEvent.error);
+                        setImageError(true);
+                        setImageLoaded(false);
+                      }}
+                    />
+                  </View>
                 )}
                 {selectedPost.location && (
                   <Text style={styles.postDetailLocation}>
@@ -530,7 +633,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   button: {
-    width: 120,
+    width: 100,
     padding: 10,
     borderRadius: 25,
     alignItems: 'center',
@@ -546,11 +649,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
+  activeButton: {
+    backgroundColor: '#B71C1C',
+    borderColor: '#B71C1C',
+  },
   buttonText: {
     fontSize: 14,
     fontWeight: '500',
     color: '#B71C1C',
     textAlign: 'center',
+  },
+  activeButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   fabButton: {
     position: 'absolute',
@@ -819,6 +930,27 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 10,
     marginBottom: 15,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 15,
+    position: 'relative',
+    backgroundColor: '#f5f5f5',
+  },
+  imagePlaceholder: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  placeholderText: {
+    marginTop: 8,
+    color: '#999',
+    fontSize: 14,
   },
   postDetailLocation: {
     fontSize: 14,

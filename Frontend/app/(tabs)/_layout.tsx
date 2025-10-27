@@ -82,31 +82,9 @@ const Layout = () => {
           <Tabs.Screen
             name="index"
             options={{
-              title: 'Menu',
+              title: 'Home',
               headerShown: false,
-              tabBarButton: (props) => {
-                 const isSelected = props.accessibilityState?.selected ?? false;
-                 const iconColor = isSelected ? '#2874F0' : '#828282';
-                 const { style, onPress, ...restProps } = props as any;
-
-                 return (
-                  <TouchableOpacity
-                    {...restProps}
-                    style={style}
-                    onPress={() => setIsSidebarOpen(true)}
-                  >
-                   {renderTabIcon('menu-outline', 'Menu', isSelected, iconColor)}
-                  </TouchableOpacity>
-                );
-              },
-            }}
-          />
-          <Tabs.Screen
-            name="helpAndAsk"
-            options={{
-              title: 'Help & Ask',
-              headerShown: false,
-              tabBarIcon: ({ color, focused }) => renderTabIcon('help-circle-outline', 'Help & Ask', focused, color),
+              tabBarIcon: ({ color, focused }) => renderTabIcon('home-outline', 'Home', focused, color),
             }}
           />
           <Tabs.Screen
@@ -118,11 +96,41 @@ const Layout = () => {
             }}
           />
           <Tabs.Screen
+            name="helpAndAsk"
+            options={{
+              title: 'Help & Ask',
+              headerShown: false,
+              tabBarIcon: ({ color, focused }) => renderTabIcon('help-circle-outline', 'Help & Ask', focused, color),
+            }}
+          />
+          <Tabs.Screen
             name="chat"
             options={{
               title: 'Chat',
               headerShown: false,
               tabBarIcon: ({ color, focused }) => renderTabIcon('chatbubble-outline', 'Chat', focused, color),
+            }}
+          />
+          <Tabs.Screen
+            name="menu"
+            options={{
+              title: 'Menu',
+              headerShown: false,
+              tabBarButton: (props) => {
+                 const isSelected = props.accessibilityState?.selected ?? false;
+                 const iconColor = isSelected ? '#2874F0' : '#828282';
+                 const { style, onPress, ...restProps } = props as any;
+
+                 return (
+                  <TouchableOpacity
+                    {...restProps}
+                    style={[style, { width: '100%', height: '100%', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 6, paddingBottom: 0 }]}
+                    onPress={() => setIsSidebarOpen(true)}
+                  >
+                   {renderTabIcon('menu-outline', 'Menu', isSelected, iconColor)}
+                  </TouchableOpacity>
+                );
+              },
             }}
           />
           <Tabs.Screen

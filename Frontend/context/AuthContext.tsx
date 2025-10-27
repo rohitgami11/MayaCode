@@ -1,12 +1,13 @@
 import { useRouter } from 'expo-router';
-import React, { createContext, ReactNode, useContext, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useState, useEffect } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Backend API Configuration
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000';
+const API_URL = API_BASE_URL; // Use base URL directly for auth routes
 
 // Define types
 export interface User {
@@ -44,6 +45,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Track initial auth check
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -52,14 +54,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const router = useRouter();
 
   const checkAuthStatus = async (): Promise<void> => {
-    setIsLoading(true);
+    setIsCheckingAuth(true);
     try {
       console.log('Checking auth status...');
       const storedToken = await AsyncStorage.getItem('authToken');
       
       if (storedToken) {
         // Verify token with backend
-        const response = await axios.get(`${API_BASE_URL}/auth/verify-token`, {
+        const response = await axios.get(`${API_URL}/auth/verify-token`, {
           headers: { Authorization: `Bearer ${storedToken}` }
         });
         
@@ -85,7 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(null);
       setIsAuthenticated(false);
     } finally {
-      setIsLoading(false);
+      setIsCheckingAuth(false);
     }
   };
 
@@ -94,12 +96,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('Sending OTP to:', email);
       console.log('Using API URL:', API_BASE_URL);
-      console.log('Full request URL:', `${API_BASE_URL.replace('/api', '')}/auth/request-otp`);
+      console.log('Full request URL:', `${API_URL}/auth/request-otp`);
       
       // Skip health check for now - go directly to OTP request
       console.log('Attempting OTP request...');
 
-      const response = await axios.post(`${API_BASE_URL.replace('/api', '')}/auth/request-otp`, {
+      const response = await axios.post(`${API_URL}/auth/request-otp`, {
         email: email
       }, {
         timeout: 10000, // 10 second timeout
@@ -167,7 +169,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log(`Verifying OTP for email: ${email}`);
       
-      const response = await axios.post(`${API_BASE_URL.replace('/api', '')}/auth/verify-otp`, {
+      const response = await axios.post(`${API_URL}/auth/verify-otp`, {
         email: email,
         otp: otp
       }, {
@@ -259,8 +261,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut
   };
 
-  // Only show loading screen when explicitly loading auth status
-  if (isLoading && isSendingOtp === false && isVerifyingOtp === false) {
+  // Check auth status on component mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  // Only show loading screen during initial auth check
+  if (isCheckingAuth) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#e8f5e9' }}>
         <ActivityIndicator size="large" color="#3b82f6" />

@@ -35,8 +35,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   const connectSocket = useCallback(() => {
     if (!socket) {
-      console.log("[Socket] Connecting to:", process.env.EXPO_PUBLIC_BASE_URL);
-      const _socket = io(process.env.EXPO_PUBLIC_BASE_URL, {
+      const socketURL = process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000';
+      console.log("[Socket] Connecting to:", socketURL);
+      const _socket = io(socketURL, {
         autoConnect: true,
         reconnection: true,
         reconnectionAttempts: 5,
@@ -62,7 +63,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           context: (err as any)?.context,
           type: (err as any)?.type,
           transport: (err as any)?.transport,
-          url: process.env.EXPO_PUBLIC_BASE_URL
+          url: process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000'
         });
         setConnectionStatus('error');
         if (Toast && Toast.show) {
@@ -77,7 +78,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           context: (err as any)?.context,
           type: (err as any)?.type,
           transport: (err as any)?.transport,
-          url: process.env.EXPO_PUBLIC_BASE_URL
+          url: process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000'
         });
         setConnectionStatus('error');
         if (Toast && Toast.show) {

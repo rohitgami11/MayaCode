@@ -4,10 +4,10 @@
     "slug": "mayacode",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/MayaCode-logo.png",
+    "icon": "./assets/MayaCode-logo.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/MayaCode-logo.png",
+      "image": "./assets/MayaCode-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -26,7 +26,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/MayaCode-logo.png",
+        "foregroundImage": "./assets/MayaCode-logo.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.mayacode.app",
