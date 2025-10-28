@@ -399,6 +399,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
 };
 
 export default function HelpAndAsk() {
+  const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -407,6 +408,7 @@ export default function HelpAndAsk() {
   const [imageLoading, setImageLoading] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
 
   const openModal = () => setIsModalVisible(true);
   const closeModal = () => setIsModalVisible(false);
@@ -414,6 +416,59 @@ export default function HelpAndAsk() {
   const handlePostCreated = () => {
     fetchPosts();
     closeModal();
+  };
+
+  const handleEditPost = () => {
+    setIsEditModalVisible(true);
+  };
+
+  const handleDeletePost = async () => {
+    if (!selectedPost) return;
+
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const success = await postService.deletePost(selectedPost._id!.toString());
+              if (success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Post Deleted',
+                  text2: 'Your post has been deleted successfully.',
+                });
+                setIsPostDetailVisible(false);
+                fetchPosts();
+              } else {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Delete Failed',
+                  text2: 'Could not delete the post. Please try again.',
+                });
+              }
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Delete Failed',
+                text2: 'An error occurred while deleting the post.',
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePostUpdated = () => {
+    fetchPosts();
+    setIsEditModalVisible(false);
+    setIsPostDetailVisible(false);
   };
 
   const fetchPosts = async () => {
@@ -585,6 +640,21 @@ export default function HelpAndAsk() {
                     />
                   </View>
                 )}
+                
+                {/* Edit/Delete buttons for post owner */}
+                {user?.email === selectedPost.email && (
+                  <View style={styles.postActionsContainer}>
+                    <TouchableOpacity style={styles.editButton} onPress={handleEditPost}>
+                      <Ionicons name="pencil" size={20} color="#007AFF" />
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePost}>
+                      <Ionicons name="trash" size={20} color="#FF3B30" />
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                
                 {selectedPost.location && (
                   <Text style={styles.postDetailLocation}>
                     Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
@@ -601,6 +671,13 @@ export default function HelpAndAsk() {
           </View>
         </View>
       </Modal>
+
+      {/* Edit Post Modal */}
+      <CreatePostModal
+        visible={isEditModalVisible}
+        onClose={() => setIsEditModalVisible(false)}
+        onPostCreated={handlePostUpdated}
+      />
     </View>
   );
 }
@@ -1014,6 +1091,44 @@ const styles = StyleSheet.create({
   },  
   askHelpMarker: {
     backgroundColor: '#2196F3', // Blue for ask help
+  },
+  postActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 20,
+    paddingHorizontal: 20,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
+  },
+  editButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  deleteButtonText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 
 });
