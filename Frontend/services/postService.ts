@@ -6,7 +6,7 @@ const API_URL = `${process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000'}/
 export const postService = {
   // Create a new post
   async createPost(
-    phone: string,
+    email: string,
     type: Post['type'],
     title: string,
     content: string,
@@ -21,7 +21,7 @@ export const postService = {
     }
     
     console.log('Starting createPost with:', {
-      phone,
+      email,
       type,
       title,
       content,
@@ -31,7 +31,7 @@ export const postService = {
 
     try {
       console.log('Creating post object...');
-      const post = createPost(phone, type, title, content, data);
+      const post = createPost(email, type, title, content, data);
       
       // Sanitize post for logging
       const logPost = { ...post };
@@ -92,12 +92,12 @@ export const postService = {
     }
   },
 
-  // Get posts by phone
-  async getUserPosts(phone: string): Promise<Post[]> {
+  // Get posts by email
+  async getUserPosts(email: string): Promise<Post[]> {
     try {
       console.log('postService API_URL:', API_URL);
-      console.log('Starting getUserPosts with:', { phone });
-      const response = await fetch(`${API_URL}/posts/phone/${phone}`);
+      console.log('Starting getUserPosts with:', { email });
+      const response = await fetch(`${API_URL}/posts/email/${email}`);
       if (!response.ok) throw new Error('Failed to fetch user posts');
       return response.json();
     } catch (error) {
