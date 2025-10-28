@@ -34,10 +34,11 @@ exports.createPost = async (req, res) => {
       
       try {
         body.images = await uploadImagesToCloudinary(body.images);
-        console.log('✅ Images uploaded to Cloudinary');
+        console.log('✅ Images processed successfully');
       } catch (uploadError) {
-        console.error('❌ Error uploading to Cloudinary:', uploadError.message);
-        throw uploadError;
+        console.error('❌ Error processing images:', uploadError.message || uploadError);
+        // Don't throw - continue with original images
+        console.log('⚠️ Continuing with original image data');
       }
     }
     
