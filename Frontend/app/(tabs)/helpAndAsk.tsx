@@ -644,13 +644,13 @@ export default function HelpAndAsk() {
                 {/* Edit/Delete buttons for post owner */}
                 {user?.email === selectedPost.email && (
                   <View style={styles.postActionsContainer}>
-                    <TouchableOpacity style={styles.editButton} onPress={handleEditPost}>
-                      <Ionicons name="pencil" size={20} color="#007AFF" />
-                      <Text style={styles.editButtonText}>Edit</Text>
+                    <TouchableOpacity style={styles.actionButton} onPress={handleEditPost}>
+                      <Ionicons name="create-outline" size={20} color="#007BFF" />
+                      <Text style={styles.actionButtonText}>Edit</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePost}>
-                      <Ionicons name="trash" size={20} color="#FF3B30" />
-                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    <TouchableOpacity style={styles.actionButton} onPress={handleDeletePost}>
+                      <Ionicons name="trash-outline" size={20} color="#DC3545" />
+                      <Text style={styles.actionButtonText}>Delete</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -960,13 +960,6 @@ const styles = StyleSheet.create({
   selectedTypeButtonText: {
     color: '#fff',
   },
-  actionButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
   postDetailModalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1094,41 +1087,18 @@ const styles = StyleSheet.create({
   },
   postActionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 20,
-    paddingHorizontal: 20,
+    justifyContent: 'flex-end',
+    marginTop: 10,
   },
-  editButton: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BBDEFB',
+    marginLeft: 15,
   },
-  editButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-  },
-  deleteButtonText: {
-    color: '#FF3B30',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  actionButtonText: {
+    marginLeft: 5,
+    fontSize: 14,
+    color: '#007BFF',
   },
 
 });
