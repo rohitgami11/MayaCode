@@ -19,17 +19,9 @@ const upload = multer({
   }
 });
 
-// Add detailed logging middleware - THIS RUNS FIRST
+// Add basic logging middleware
 router.use((req, res, next) => {
-  console.log(`📨 POST ROUTE MIDDLEWARE: ${req.method} ${req.url}`);
-  console.log('Request headers:', req.headers);
-  console.log('Content-Type:', req.headers['content-type']);
-  console.log('Content-Length:', req.headers['content-length']);
-  console.log('Request body exists:', !!req.body);
-  if (req.body) {
-    console.log('Request body keys:', Object.keys(req.body));
-    console.log('Request body size:', JSON.stringify(req.body).length, 'characters');
-  }
+  console.log(`📨 ${req.method} ${req.url}`);
   next();
 });
 

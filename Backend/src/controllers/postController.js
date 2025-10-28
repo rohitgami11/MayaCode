@@ -7,36 +7,14 @@ const { uploadImagesToCloudinary } = require('../utils/cloudinaryUploader');
 
 // Create a new post
 exports.createPost = async (req, res) => {
-  // IMMEDIATE LOGGING - This should always appear if request reaches controller
-  console.log('🚀 CREATE POST CONTROLLER CALLED');
-  console.log('Request method:', req.method);
-  console.log('Request URL:', req.url);
-  console.log('Request headers content-type:', req.headers['content-type']);
-  console.log('Request body keys:', Object.keys(req.body || {}));
-  console.log('Request body size:', req.body ? JSON.stringify(req.body).length : 'no body');
-  
-  if (req.body.images) {
-    console.log('Images field exists, count:', Array.isArray(req.body.images) ? req.body.images.length : 'not array');
-    if (Array.isArray(req.body.images) && req.body.images.length > 0) {
-      console.log('First image preview:', req.body.images[0] ? req.body.images[0].substring(0, 100) + '...' : 'empty');
-    }
-  }
-  
-  console.log(`HTTP ${req.method} ${req.url} - Create Post`);
-  console.log('Request body:', req.body);
-  console.log('Uploaded files:', req.files ? req.files.length : 'none');
+  console.log(`📝 Creating post: ${req.body.title || 'Untitled'}`);
   
   try {
     let body = { ...req.body };
-    console.log('Post body before processing:', JSON.stringify({
-      ...body,
-      images: body.images ? `[${body.images.length} image(s)]` : 'none'
-    }));
     
     // Handle images - either from base64 (current frontend) or file uploads (multer)
     if (req.files && req.files.length > 0) {
-      console.log('🖼️ Processing uploaded files...');
-      console.log('Number of files:', req.files.length);
+      console.log(`🖼️ Processing ${req.files.length} uploaded files...`);
       
       // Convert uploaded files to base64 for Cloudinary
       const base64Images = req.files.map(file => {
@@ -46,41 +24,29 @@ exports.createPost = async (req, res) => {
       
       try {
         body.images = await uploadImagesToCloudinary(base64Images);
-        console.log('✅ Images uploaded successfully to Cloudinary');
-        console.log('Cloudinary URLs:', body.images);
+        console.log('✅ Images uploaded to Cloudinary');
       } catch (uploadError) {
-        console.error('❌ Error uploading to Cloudinary:', uploadError);
+        console.error('❌ Error uploading to Cloudinary:', uploadError.message);
         throw uploadError;
       }
     } else if (body.images && Array.isArray(body.images) && body.images.length > 0) {
-      console.log('🖼️ Processing base64 images...');
-      console.log('Number of images:', body.images.length);
+      console.log(`🖼️ Processing ${body.images.length} base64 images...`);
       
       try {
         body.images = await uploadImagesToCloudinary(body.images);
-        console.log('✅ Images uploaded successfully to Cloudinary');
-        console.log('Cloudinary URLs:', body.images);
+        console.log('✅ Images uploaded to Cloudinary');
       } catch (uploadError) {
-        console.error('❌ Error uploading to Cloudinary:', uploadError);
+        console.error('❌ Error uploading to Cloudinary:', uploadError.message);
         throw uploadError;
       }
-    } else {
-      console.log('ℹ️ No images to upload');
     }
     
-    console.log('📝 Creating post in MongoDB...');
     const post = new Post(body);
     await post.save();
-    console.log('✅ Post created successfully in MongoDB');
+    console.log('✅ Post created successfully');
     res.status(201).json(post);
   } catch (error) {
-    console.error('❌ Error creating post:', error);
-    console.error('Error details:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      errors: error.errors
-    });
+    console.error('❌ Error creating post:', error.message);
     if (error.name === 'ValidationError') {
       res.status(400).json({ message: error.message });
     } else {
