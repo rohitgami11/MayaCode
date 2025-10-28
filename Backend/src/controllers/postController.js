@@ -7,23 +7,38 @@ const { uploadImagesToCloudinary } = require('../utils/cloudinaryUploader');
 
 // Create a new post
 exports.createPost = async (req, res) => {
-  const logBody = { ...req.body };
-  if (logBody.images) {
-    logBody.images = logBody.images.map((img) => 
-      img ? (img.substring(0, 50) + '... (base64 image data)') : 'null'
-    );
-  }
-  console.log(`HTTP ${req.method} ${req.url} - Create Post`, logBody);
+  console.log(`HTTP ${req.method} ${req.url} - Create Post`);
+  console.log('Request body:', req.body);
+  console.log('Uploaded files:', req.files ? req.files.length : 'none');
+  
   try {
-    // Upload images to Cloudinary and replace base64 with URLs
     let body = { ...req.body };
     console.log('Post body before processing:', JSON.stringify({
       ...body,
       images: body.images ? `[${body.images.length} image(s)]` : 'none'
     }));
     
-    if (body.images && Array.isArray(body.images) && body.images.length > 0) {
-      console.log('🖼️ Starting image upload to Cloudinary...');
+    // Handle images - either from base64 (current frontend) or file uploads (multer)
+    if (req.files && req.files.length > 0) {
+      console.log('🖼️ Processing uploaded files...');
+      console.log('Number of files:', req.files.length);
+      
+      // Convert uploaded files to base64 for Cloudinary
+      const base64Images = req.files.map(file => {
+        const base64 = file.buffer.toString('base64');
+        return `data:${file.mimetype};base64,${base64}`;
+      });
+      
+      try {
+        body.images = await uploadImagesToCloudinary(base64Images);
+        console.log('✅ Images uploaded successfully to Cloudinary');
+        console.log('Cloudinary URLs:', body.images);
+      } catch (uploadError) {
+        console.error('❌ Error uploading to Cloudinary:', uploadError);
+        throw uploadError;
+      }
+    } else if (body.images && Array.isArray(body.images) && body.images.length > 0) {
+      console.log('🖼️ Processing base64 images...');
       console.log('Number of images:', body.images.length);
       
       try {
@@ -32,10 +47,6 @@ exports.createPost = async (req, res) => {
         console.log('Cloudinary URLs:', body.images);
       } catch (uploadError) {
         console.error('❌ Error uploading to Cloudinary:', uploadError);
-        console.error('Upload error details:', {
-          message: uploadError.message,
-          stack: uploadError.stack
-        });
         throw uploadError;
       }
     } else {
