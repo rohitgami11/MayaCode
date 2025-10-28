@@ -30,8 +30,8 @@ const app = express();
 const path = require('path');
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '50mb' })); // Increase JSON body limit for base64 images
+app.use(express.urlencoded({ limit: '50mb', extended: false })); // Increase URL encoded limit
 
 // Serve static files from public directory with optimized headers
 app.use('/public', express.static(path.join(__dirname, '..', 'public'), {
@@ -89,6 +89,19 @@ app.use("/api/users", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/images", imageRoutes);
+
+// Global error handler for unhandled exceptions
+app.use((err, req, res, next) => {
+  console.error('🚨 GLOBAL ERROR HANDLER:', err);
+  console.error('Error stack:', err.stack);
+  console.error('Request URL:', req.url);
+  console.error('Request method:', req.method);
+  console.error('Request body size:', req.body ? JSON.stringify(req.body).length : 'no body');
+  res.status(500).json({ 
+    message: 'Internal server error', 
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!' 
+  });
+});
 
 // Error middleware
 app.use(errorHandler);

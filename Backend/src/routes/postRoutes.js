@@ -19,10 +19,17 @@ const upload = multer({
   }
 });
 
-// Add detailed logging middleware
+// Add detailed logging middleware - THIS RUNS FIRST
 router.use((req, res, next) => {
-  console.log(`📨 POST ROUTE: ${req.method} ${req.url}`);
+  console.log(`📨 POST ROUTE MIDDLEWARE: ${req.method} ${req.url}`);
   console.log('Request headers:', req.headers);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Content-Length:', req.headers['content-length']);
+  console.log('Request body exists:', !!req.body);
+  if (req.body) {
+    console.log('Request body keys:', Object.keys(req.body));
+    console.log('Request body size:', JSON.stringify(req.body).length, 'characters');
+  }
   next();
 });
 
@@ -35,7 +42,7 @@ router.use((err, req, res, next) => {
 });
 
 // Post routes
-router.post('/', upload.array('images', 5), postController.createPost); // Allow up to 5 images
+router.post('/', postController.createPost); // Remove multer middleware for base64 JSON requests
 router.get('/', postController.getPosts);
 router.get('/:id/images', postController.getPostImages); // Lazy load images endpoint (must be before /:id)
 router.get('/:id', postController.getPost);

@@ -7,6 +7,21 @@ const { uploadImagesToCloudinary } = require('../utils/cloudinaryUploader');
 
 // Create a new post
 exports.createPost = async (req, res) => {
+  // IMMEDIATE LOGGING - This should always appear if request reaches controller
+  console.log('🚀 CREATE POST CONTROLLER CALLED');
+  console.log('Request method:', req.method);
+  console.log('Request URL:', req.url);
+  console.log('Request headers content-type:', req.headers['content-type']);
+  console.log('Request body keys:', Object.keys(req.body || {}));
+  console.log('Request body size:', req.body ? JSON.stringify(req.body).length : 'no body');
+  
+  if (req.body.images) {
+    console.log('Images field exists, count:', Array.isArray(req.body.images) ? req.body.images.length : 'not array');
+    if (Array.isArray(req.body.images) && req.body.images.length > 0) {
+      console.log('First image preview:', req.body.images[0] ? req.body.images[0].substring(0, 100) + '...' : 'empty');
+    }
+  }
+  
   console.log(`HTTP ${req.method} ${req.url} - Create Post`);
   console.log('Request body:', req.body);
   console.log('Uploaded files:', req.files ? req.files.length : 'none');
