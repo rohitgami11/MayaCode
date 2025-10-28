@@ -640,8 +640,17 @@ export default function HelpAndAsk() {
                     />
                   </View>
                 )}
+                {selectedPost.location && (
+                  <Text style={styles.postDetailLocation}>
+                    Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
+                  </Text>
+                )}
+                {selectedPost.email ? <Text style={styles.postDetailAuthor}>By: {selectedPost.email}</Text> : null}
+                <Text style={styles.postDetailDate}>
+                  Created: {new Date(selectedPost.createdAt).toLocaleDateString()}
+                </Text>
                 
-                {/* Edit/Delete buttons for post owner */}
+                {/* Edit/Delete buttons for post owner - positioned at bottom right */}
                 {user?.email === selectedPost.email && (
                   <View style={styles.postActionsContainer}>
                     <TouchableOpacity style={styles.actionButton} onPress={handleEditPost}>
@@ -654,16 +663,6 @@ export default function HelpAndAsk() {
                     </TouchableOpacity>
                   </View>
                 )}
-                
-                {selectedPost.location && (
-                  <Text style={styles.postDetailLocation}>
-                    Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
-                  </Text>
-                )}
-                {selectedPost.email ? <Text style={styles.postDetailAuthor}>By: {selectedPost.email}</Text> : null}
-                <Text style={styles.postDetailDate}>
-                  Created: {new Date(selectedPost.createdAt).toLocaleDateString()}
-                </Text>
               </ScrollView>
             ) : (
               <ActivityIndicator size="large" color="#007AFF" />
@@ -975,7 +974,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   postDetailScrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 10,
   },
   postDetailTitle: {
     fontSize: 20,
@@ -1089,6 +1088,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     marginTop: 10,
+    marginBottom: 0,
+    paddingHorizontal: 10,
   },
   actionButton: {
     flexDirection: 'row',
