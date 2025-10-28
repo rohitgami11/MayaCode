@@ -30,6 +30,10 @@ router.get('/phone/:phone', userController.getUserByPhone);
 router.put('/phone/:phone', userController.createOrUpdateUser);
 router.delete('/phone/:phone', userController.deleteUser);
 
+// Profile routes (using JWT token)
+router.get('/profile', userController.getProfile);
+router.put('/profile', userController.updateProfile);
+
 // User stats routes
 router.put('/phone/:phone/stats', userController.updateUserStats);
 

@@ -1,4 +1,17 @@
 const UserProfile = require('../models/User');
+const jwt = require('jsonwebtoken');
+
+// Helper function to extract user info from JWT token
+const getUserFromToken = (req) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('No authorization token provided');
+  }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  const decoded = jwt.verify(token, process.env.JWT_SECRET_VERIFY);
+  return decoded;
+};
 
 // Get user profile by phone
 exports.getUserByPhone = async (req, res) => {
@@ -268,5 +281,115 @@ exports.getAllUsers = async (req, res) => {
   } catch (error) {
     console.error('❌ Get All Users - Error:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Get user profile using JWT token
+exports.getProfile = async (req, res) => {
+  try {
+    console.log('Get Profile - Request received');
+    
+    const userInfo = getUserFromToken(req);
+    console.log('Get Profile - User info from token:', userInfo);
+    
+    const user = await UserProfile.findOne({ email: userInfo.email });
+    if (!user) {
+      console.log('Get Profile - User not found:', userInfo.email);
+      return res.status(404).json({ message: 'User profile not found' });
+    }
+    
+    console.log('Get Profile - Success:', user);
+    res.json(user);
+  } catch (error) {
+    console.error('❌ Get Profile - Error:', error);
+    if (error.message === 'No authorization token provided') {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update user profile using JWT token
+exports.updateProfile = async (req, res) => {
+  try {
+    console.log('Update Profile - Request received');
+    console.log('Update Profile - Request body:', req.body);
+    
+    const userInfo = getUserFromToken(req);
+    console.log('Update Profile - User info from token:', userInfo);
+    
+    // Get values from request body
+    const updates = {
+      name: req.body.name,
+      userType: req.body.userType,
+      age: req.body.age,
+      languages: req.body.languages || [],
+      profileImage: req.body.profileImage,
+      location: req.body.location,
+      lastActive: new Date()
+    };
+    
+    console.log('Update Profile - Updates:', updates);
+    
+    // Validate required fields
+    if (!updates.name || !updates.userType) {
+      console.log('Update Profile - Missing required fields:', {
+        hasName: !!updates.name,
+        hasUserType: !!updates.userType,
+        body: req.body
+      });
+      return res.status(400).json({ 
+        message: 'Missing required fields',
+        required: ['name', 'userType']
+      });
+    }
+
+    // Clean up updates
+    const cleanedUpdates = {
+      email: userInfo.email, // Add email to the updates
+      name: updates.name,
+      age: updates.age,
+      userType: updates.userType,
+      languages: updates.languages,
+      profileImage: updates.profileImage,
+      location: updates.location,
+      lastActive: new Date()
+    };
+
+    // Remove undefined values
+    Object.keys(cleanedUpdates).forEach(key => 
+      cleanedUpdates[key] === undefined && delete cleanedUpdates[key]
+    );
+    console.log('Update Profile - Final updates:', cleanedUpdates);
+
+    console.log('Update Profile - Attempting database operation');
+    const user = await UserProfile.findOneAndUpdate(
+      { email: userInfo.email },
+      { $set: cleanedUpdates },
+      { 
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true
+      }
+    );
+
+    console.log('Update Profile - Success:', user);
+    res.json(user);
+  } catch (error) {
+    console.error('❌ Update Profile - Error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    if (error.message === 'No authorization token provided') {
+      return res.status(401).json({ message: 'Authorization token required' });
+    }
+    
+    res.status(500).json({ 
+      message: 'Error updating user profile', 
+      error: error.message 
+    });
   }
 }; 
