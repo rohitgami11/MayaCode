@@ -26,23 +26,23 @@ router.use((err, req, res, next) => {
 });
 
 // User profile routes
-router.get('/phone/:phone', userController.getUserByPhone);
-router.put('/phone/:phone', userController.createOrUpdateUser);
-router.delete('/phone/:phone', userController.deleteUser);
+router.get('/email/:email', userController.getUserByEmail);
+router.put('/email/:email', userController.createOrUpdateUser);
+router.delete('/email/:email', userController.deleteUser);
 
 // Profile routes (using JWT token)
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
 
 // User stats routes
-router.put('/phone/:phone/stats', userController.updateUserStats);
+router.put('/email/:email/stats', userController.updateUserStats);
 
 // User posts routes
-router.post('/phone/:phone/posts', userController.addCreatedPost);
+router.post('/email/:email/posts', userController.addCreatedPost);
 
 // Preferences routes
-router.put('/phone/:phone/preferences', userController.updatePreferences);
-router.get('/phone/:phone/preferences', userController.getPreferences);
+router.put('/email/:email/preferences', userController.updatePreferences);
+router.get('/email/:email/preferences', userController.getPreferences);
 
 // Get all users
 router.get('/', userController.getAllUsers);

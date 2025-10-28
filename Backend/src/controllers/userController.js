@@ -13,16 +13,16 @@ const getUserFromToken = (req) => {
   return decoded;
 };
 
-// Get user profile by phone
-exports.getUserByPhone = async (req, res) => {
-  console.log(`HTTP ${req.method} ${req.url} - Get User By Phone`, req.params);
+// Get user profile by email
+exports.getUserByEmail = async (req, res) => {
+  console.log(`HTTP ${req.method} ${req.url} - Get User By Email`, req.params);
   try {
-    const { phone } = req.params;
-    console.log('Get User - Request:', { phone });
+    const { email } = req.params;
+    console.log('Get User - Request:', { email });
 
-    const user = await UserProfile.findOne({ phone });
+    const user = await UserProfile.findOne({ email });
     if (!user) {
-      console.log('Get User - User not found:', phone);
+      console.log('Get User - User not found:', email);
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -38,8 +38,8 @@ exports.getUserByPhone = async (req, res) => {
 exports.createOrUpdateUser = async (req, res) => {
   try {
     console.log('Create/Update User - Starting process');
-    const { phone } = req.params;
-    console.log('Create/Update User - Phone:', phone);
+    const { email } = req.params;
+    console.log('Create/Update User - Email:', email);
     
     // Get values from request body
     const updates = {
@@ -48,6 +48,7 @@ exports.createOrUpdateUser = async (req, res) => {
       age: req.body.age,
       languages: req.body.languages || [],
       profileImage: req.body.profileImage,
+      location: req.body.location,
       lastActive: new Date()
     };
     
@@ -70,12 +71,13 @@ exports.createOrUpdateUser = async (req, res) => {
     // Clean up updates
     console.log('Create/Update User - Cleaning updates');
     const cleanedUpdates = {
-      phone, // Add phone to the updates
+      email, // Add email to the updates
       name: updates.name,
       age: updates.age,
       userType: updates.userType,
       languages: updates.languages,
       profileImage: updates.profileImage,
+      location: updates.location,
       lastActive: new Date()
     };
 
@@ -87,7 +89,7 @@ exports.createOrUpdateUser = async (req, res) => {
 
     console.log('Create/Update User - Attempting database operation');
     const user = await UserProfile.findOneAndUpdate(
-      { phone },
+      { email },
       { $set: cleanedUpdates },
       { 
         new: true,
@@ -115,12 +117,12 @@ exports.createOrUpdateUser = async (req, res) => {
 // Delete user profile
 exports.deleteUser = async (req, res) => {
   try {
-    const { phone } = req.params;
-    console.log('Delete User - Request:', { phone });
+    const { email } = req.params;
+    console.log('Delete User - Request:', { email });
 
-    const user = await UserProfile.findOneAndDelete({ phone });
+    const user = await UserProfile.findOneAndDelete({ email });
     if (!user) {
-      console.log('Delete User - User not found:', phone);
+      console.log('Delete User - User not found:', email);
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -135,18 +137,18 @@ exports.deleteUser = async (req, res) => {
 // Update user stats
 exports.updateUserStats = async (req, res) => {
   try {
-    const { phone } = req.params;
+    const { email } = req.params;
     const { stats } = req.body;
-    console.log('Update Stats - Request:', { phone, stats });
+    console.log('Update Stats - Request:', { email, stats });
 
     const user = await UserProfile.findOneAndUpdate(
-      { phone },
+      { email },
       { $set: { stats } },
       { new: true, runValidators: true }
     );
 
     if (!user) {
-      console.log('Update Stats - User not found:', phone);
+      console.log('Update Stats - User not found:', email);
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -161,9 +163,9 @@ exports.updateUserStats = async (req, res) => {
 // Add created post
 exports.addCreatedPost = async (req, res) => {
   try {
-    const { phone } = req.params;
+    const { email } = req.params;
     const { postId, postType } = req.body;
-    console.log('Add Post - Request:', { phone, postId, postType });
+    console.log('Add Post - Request:', { email, postId, postType });
 
     if (!postId || !postType) {
       return res.status(400).json({ 
@@ -186,7 +188,7 @@ exports.addCreatedPost = async (req, res) => {
     }
 
     const user = await UserProfile.findOneAndUpdate(
-      { phone },
+      { email },
       { 
         $addToSet: { [updateField]: postId },
         $inc: { [`stats.${updateField.replace('created', '').toLowerCase()}Count`]: 1 }
@@ -195,7 +197,7 @@ exports.addCreatedPost = async (req, res) => {
     );
 
     if (!user) {
-      console.log('Add Post - User not found:', phone);
+      console.log('Add Post - User not found:', email);
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -210,17 +212,17 @@ exports.addCreatedPost = async (req, res) => {
 // Get user preferences
 exports.getPreferences = async (req, res) => {
   try {
-    const { phone } = req.params;
+    const { email } = req.params;
     console.log('Get Preferences - Request:', {
-      phone,
+      email,
       params: req.params
     });
 
-    const user = await UserProfile.findOne({ phone });
+    const user = await UserProfile.findOne({ email });
     console.log('Get Preferences - User Check:', user);
 
     if (!user) {
-      console.log('Get Preferences - User not found:', phone);
+      console.log('Get Preferences - User not found:', email);
       return res.status(404).json({ message: 'User profile not found' });
     }
 
@@ -235,26 +237,26 @@ exports.getPreferences = async (req, res) => {
 // Update user preferences
 exports.updatePreferences = async (req, res) => {
   try {
-    const { phone } = req.params;
+    const { email } = req.params;
     const { preferences } = req.body;
     console.log('Update Preferences - Request:', {
-      phone,
+      email,
       preferences,
       params: req.params,
       body: req.body
     });
 
     // First check if user exists
-    const existingUser = await UserProfile.findOne({ phone });
+    const existingUser = await UserProfile.findOne({ email });
     console.log('Update Preferences - Existing User Check:', existingUser);
 
     if (!existingUser) {
-      console.log('Update Preferences - User not found:', phone);
+      console.log('Update Preferences - User not found:', email);
       return res.status(404).json({ message: 'User profile not found. Please create a profile first.' });
     }
 
     const profile = await UserProfile.findOneAndUpdate(
-      { phone },
+      { email },
       { $set: { preferences } },
       { new: true, runValidators: true }
     );

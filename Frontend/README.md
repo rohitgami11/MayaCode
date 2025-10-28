@@ -93,12 +93,14 @@ A full-stack mobile platform connecting refugees and helpers for community-drive
 
 | Method | Endpoint                                 | Description                        |
 |--------|------------------------------------------|------------------------------------|
-| POST   | `/api/users/phone/:phone`                | Create or update user profile      |
-| GET    | `/api/users/phone/:phone`                | Retrieve user profile              |
-| PUT    | `/api/users/phone/:phone`                | Update user profile                |
-| DELETE | `/api/users/phone/:phone`                | Delete user profile                |
-| POST   | `/api/users/phone/:phone/posts`          | Add a new post (help/offer/story)  |
-| PUT    | `/api/users/phone/:phone/stats`          | Update user statistics             |
+| POST   | `/api/users/email/:email`                | Create or update user profile      |
+| GET    | `/api/users/email/:email`                | Retrieve user profile              |
+| PUT    | `/api/users/email/:email`                | Update user profile                |
+| DELETE | `/api/users/email/:email`                | Delete user profile                |
+| POST   | `/api/users/email/:email/posts`          | Add a new post (help/offer/story)  |
+| PUT    | `/api/users/email/:email/stats`          | Update user statistics             |
+| GET    | `/api/users/profile`                    | Get current user profile (JWT)     |
+| PUT    | `/api/users/profile`                    | Update current user profile (JWT)  |
 
 > ℹ️ For full API documentation, refer to the backend code in `/MayaCodeBackend/routes/`.
 
