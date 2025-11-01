@@ -46,10 +46,17 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Remove node_modules to reduce package size
+          # Remove unnecessary files to reduce package size
           rm -rf node_modules
-          echo "Removed node_modules (size reduction)"
+          rm -rf logs
+          rm -rf .git
+          find . -name "*.log" -type f -delete
+          find . -name ".DS_Store" -type f -delete
+          echo "Cleaned up package"
+          echo "Package size after cleanup:"
           du -sh .
+          echo "Top 10 largest files/directories:"
+          du -h . | sort -rh | head -10
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -88,7 +95,10 @@ jobs:
           else
             echo "❌ package.json not found!"
             find . -name "package.json" -type f
+            exit 1
           fi
+          echo "Package size:"
+          du -sh .
       
       - name: Login to Azure
         uses: azure/login@v2
