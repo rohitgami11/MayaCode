@@ -48,6 +48,23 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
+          path: deploy
+      
+      - name: List files for debugging
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Contents of deploy directory:"
+          ls -la deploy || ls -la
+          if [ -d "deploy/Backend" ]; then
+            echo "Backend directory exists in deploy/"
+            ls -la deploy/Backend
+          elif [ -d "Backend" ]; then
+            echo "Backend directory exists in root"
+          elif [ -f "deploy/package.json" ]; then
+            echo "package.json found in deploy/ - contents are at root of deploy"
+            ls -la deploy
+          fi
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -62,5 +79,5 @@ jobs:
         with:
           app-name: 'Maya'
           slot-name: 'Production'
-          package: ./Backend
+          package: deploy
           
