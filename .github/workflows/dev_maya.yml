@@ -43,6 +43,14 @@ jobs:
           npm run build --if-present
           npm run test --if-present
       
+      - name: Prepare deployment package
+        working-directory: ./Backend
+        run: |
+          # Remove node_modules to reduce package size
+          rm -rf node_modules
+          echo "Removed node_modules (size reduction)"
+          du -sh .
+      
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -61,6 +69,26 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
+      
+      - name: Debug - Check artifact structure
+        run: |
+          echo "Current directory contents:"
+          ls -la
+          echo "Checking for package.json:"
+          if [ -f "package.json" ]; then
+            echo "✅ package.json found at root"
+          elif [ -f "Backend/package.json" ]; then
+            echo "✅ package.json found in Backend folder"
+            echo "Moving Backend contents to root..."
+            shopt -s dotglob
+            mv Backend/* .
+            rmdir Backend
+            echo "Contents after move:"
+            ls -la
+          else
+            echo "❌ package.json not found!"
+            find . -name "package.json" -type f
+          fi
       
       - name: Login to Azure
         uses: azure/login@v2
