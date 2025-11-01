@@ -46,17 +46,16 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Remove unnecessary files to reduce package size
-          rm -rf node_modules
+          # Remove only logs and git, keep node_modules for deployment
           rm -rf logs
           rm -rf .git
           find . -name "*.log" -type f -delete
           find . -name ".DS_Store" -type f -delete
-          echo "Cleaned up package"
-          echo "Package size after cleanup:"
+          # Remove web.config for Linux deployment
+          rm -f web.config
+          echo "Prepared package (keeping node_modules)"
+          echo "Package size:"
           du -sh .
-          echo "Top 10 largest files/directories:"
-          du -h . | sort -rh | head -10
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -89,7 +88,7 @@ jobs:
             echo "Moving Backend contents to root..."
             shopt -s dotglob
             mv Backend/* .
-            rmdir Backend
+            rmdir Backend 2>/dev/null || true
             echo "Contents after move:"
             ls -la
           else
@@ -99,6 +98,8 @@ jobs:
           fi
           echo "Package size:"
           du -sh .
+          echo "Verifying package.json content:"
+          cat package.json | head -15
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -107,11 +108,30 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A991E240EF384A70891F3517360891DE }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2276E1689CF5423891BDA354FAC31928 }}
 
-      - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
-        with:
-          app-name: 'Maya'
-          slot-name: 'Production'
-          package: .
+      - name: Get App Service details
+        run: |
+          RESOURCE_GROUP=$(az webapp show --name Maya --query resourceGroup -o tsv)
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_ENV
+          echo "Resource Group: $RESOURCE_GROUP"
+          az webapp show --name Maya --query "{name:name, resourceGroup:resourceGroup, state:state, os:siteConfig.linuxFxVersion}" -o table
+      
+      - name: Deploy using Azure CLI (direct deployment)
+        run: |
+          zip -r deploy.zip . -q
+          echo "Zip file created, size:"
+          ls -lh deploy.zip
+          
+          echo "Deploying via Azure CLI..."
+          az webapp deployment source config-zip \
+            --name Maya \
+            --resource-group $RESOURCE_GROUP \
+            --src deploy.zip \
+            --timeout 600 \
+            --verbose || {
+              echo "Deployment failed. Checking logs..."
+              az webapp log tail --name Maya --resource-group $RESOURCE_GROUP || true
+              exit 1
+            }
+          
+          echo "Deployment initiated successfully"
           
