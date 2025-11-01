@@ -48,9 +48,14 @@ const connectDB = async () => {
     }
 
   } catch (error) {
-    console.error('MongoDB Connection Error:', error.message);
-    process.exit(1);
+    console.error('❌ MongoDB Connection Error:', error.message);
+    console.error('⚠️  Application will continue running, but database features will not work.');
+    console.error('💡 Please set MONGODB_URI environment variable in Azure App Service Configuration.');
+    // Don't exit - allow app to start and return helpful error messages
+    return false;
   }
+  
+  return true;
 };
 
 module.exports = connectDB;

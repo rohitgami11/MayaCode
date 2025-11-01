@@ -24,7 +24,10 @@ if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
   console.warn('Please set SMTP_USER and SMTP_PASS environment variables.');
 }
 
-connectDB();
+// Attempt to connect to database (non-blocking, won't crash app)
+connectDB().catch(err => {
+  console.error('Database connection failed:', err.message);
+});
 
 const app = express();
 const path = require('path');
@@ -62,9 +65,13 @@ app.use(passport.session());
 
 // Health check endpoint
 app.get("/", (req, res) => {
+  const mongoose = require('mongoose');
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  
   res.json({ 
     message: "MayaCode Backend is running!", 
     status: "healthy",
+    database: dbStatus,
     timestamp: new Date().toISOString(),
     endpoints: {
       auth: "/auth",
@@ -72,6 +79,10 @@ app.get("/", (req, res) => {
       users: "/api/users",
       messages: "/api/messages",
       images: "/api/images"
+    },
+    environment: {
+      mongodb_configured: !!process.env.MONGODB_URI,
+      node_env: process.env.NODE_ENV || 'not set'
     }
   });
 });
