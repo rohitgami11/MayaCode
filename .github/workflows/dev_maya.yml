@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -22,30 +22,32 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: Backend/package-lock.json
 
-      - name: npm install, build, and test
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: Backend/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('Backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        working-directory: ./Backend
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build and test
         working-directory: ./Backend
         run: |
-          npm install
           npm run build --if-present
           npm run test --if-present
-      
-      - name: Create deployment package (exclude node_modules)
-        working-directory: .
-        shell: pwsh
-        run: |
-          # Use robocopy to copy files excluding node_modules and logs
-          New-Item -ItemType Directory -Path "deploy-package" -Force | Out-Null
-          robocopy "Backend" "deploy-package" /E /XD node_modules logs .git /XF *.log /NFL /NDL /NJH /NJS
-          # robocopy exits with code 1 if files were copied (which is success), so exit 0
-          exit 0
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ./deploy-package
-          retention-days: 1
+          path: ./Backend
 
   deploy:
     runs-on: ubuntu-latest
@@ -59,7 +61,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-          path: deploy
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -74,5 +75,5 @@ jobs:
         with:
           app-name: 'Maya'
           slot-name: 'Production'
-          package: deploy
+          package: .
           
