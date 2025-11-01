@@ -1,20 +1,9 @@
 const Otp = require('../models/Otp');
 const jwt = require('jsonwebtoken');
 const UserProfile = require('../models/User');
-const { Resend } = require('resend');
+const { sendOTPEmail } = require('../services/gmailService');
 
 const OTP_EXPIRY_MINUTES = 10;
-
-// Configure Resend (works on Render free tier - 3,000 emails/month free)
-let resend;
-if (process.env.RESEND_EMAIL_API) {
-  resend = new Resend(process.env.RESEND_EMAIL_API);
-  console.log('✅ Resend configured successfully');
-} else {
-  console.warn('⚠️ RESEND_EMAIL_API not set. Email functionality will not work.');
-}
-
-// No fallback email service - only Resend
 
 // Check if email is already in use by another user
 const checkEmailInUse = async (req, res) => {
