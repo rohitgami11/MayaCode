@@ -110,10 +110,21 @@ jobs:
 
       - name: Get App Service details
         run: |
-          RESOURCE_GROUP=$(az webapp show --name Maya --query resourceGroup -o tsv)
+          echo "Listing all web apps to find resource group..."
+          az webapp list --query "[?name=='Maya'].{name:name, resourceGroup:resourceGroup, state:state}" -o table
+          RESOURCE_GROUP=$(az webapp list --query "[?name=='Maya'].resourceGroup" -o tsv | head -1)
+          if [ -z "$RESOURCE_GROUP" ]; then
+            echo "Could not find resource group. Trying alternative method..."
+            RESOURCE_GROUP=$(az resource list --name Maya --resource-type "Microsoft.Web/sites" --query "[0].resourceGroup" -o tsv)
+          fi
+          if [ -z "$RESOURCE_GROUP" ]; then
+            echo "Error: Could not determine resource group for app 'Maya'"
+            echo "Please check the app name and ensure you have proper permissions"
+            exit 1
+          fi
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_ENV
           echo "Resource Group: $RESOURCE_GROUP"
-          az webapp show --name Maya --query "{name:name, resourceGroup:resourceGroup, state:state, os:siteConfig.linuxFxVersion}" -o table
+          az webapp show --name Maya --resource-group "$RESOURCE_GROUP" --query "{name:name, resourceGroup:resourceGroup, state:state, os:siteConfig.linuxFxVersion}" -o table
       
       - name: Deploy using Azure CLI (direct deployment)
         run: |
@@ -124,12 +135,12 @@ jobs:
           echo "Deploying via Azure CLI..."
           az webapp deployment source config-zip \
             --name Maya \
-            --resource-group $RESOURCE_GROUP \
+            --resource-group "$RESOURCE_GROUP" \
             --src deploy.zip \
             --timeout 600 \
             --verbose || {
-              echo "Deployment failed. Checking logs..."
-              az webapp log tail --name Maya --resource-group $RESOURCE_GROUP || true
+              echo "Deployment failed. Getting more details..."
+              az webapp show --name Maya --resource-group "$RESOURCE_GROUP" --query "{state:state, defaultHostName:defaultHostName}" -o table || true
               exit 1
             }
           
