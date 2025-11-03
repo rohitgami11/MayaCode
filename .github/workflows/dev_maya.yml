@@ -99,6 +99,30 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A991E240EF384A70891F3517360891DE }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2276E1689CF5423891BDA354FAC31928 }}
       
+      - name: Get App Service resource group
+        id: get-rg
+        run: |
+          RESOURCE_GROUP=$(az webapp list --query "[?name=='Maya'].resourceGroup" -o tsv | head -1)
+          if [ -z "$RESOURCE_GROUP" ]; then
+            RESOURCE_GROUP=$(az resource list --name Maya --resource-type "Microsoft.Web/sites" --query "[0].resourceGroup" -o tsv)
+          fi
+          if [ -z "$RESOURCE_GROUP" ]; then
+            echo "Error: Could not determine resource group for app 'Maya'"
+            exit 1
+          fi
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
+          echo "Resource Group: $RESOURCE_GROUP"
+      
+      - name: Configure App Service for build
+        run: |
+          # Set app setting to enable build during deployment (Oryx will install node_modules)
+          az webapp config appsettings set \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+            --output none
+          echo "✅ Configured SCM_DO_BUILD_DURING_DEPLOYMENT=true"
+      
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
@@ -106,7 +130,4 @@ jobs:
           app-name: 'Maya'
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
-          # Explicitly set the app setting as an input to the action for clarity and reliability
-          app-settings: |
-            SCM_DO_BUILD_DURING_DEPLOYMENT=true
           
