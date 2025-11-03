@@ -46,21 +46,28 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Exclude node_modules - Azure will install dependencies automatically
-          # This significantly reduces package size and prevents disk space errors
-          echo "Removing node_modules to reduce package size..."
+          # Exclude node_modules and unnecessary files to reduce package size
+          echo "🧹 Cleaning up deployment package..."
           rm -rf node_modules
           rm -rf logs
           rm -rf .git
+          rm -rf .expo
+          rm -rf .cache
           find . -name "*.log" -type f -delete
           find . -name ".DS_Store" -type f -delete
+          find . -name "*.md" -not -name "package.json" -type f -delete || true
+          # Remove test files if they exist
+          find . -name "*.test.js" -type f -delete || true
+          find . -name "*.spec.js" -type f -delete || true
           # Note: web.config is for Windows IIS deployment
           # If your Azure App Service is Linux-based, uncomment the next line:
           # rm -f web.config
           # For Windows App Service, keep web.config
-          echo "✅ Prepared deployment package (node_modules excluded - Azure will install)"
-          echo "Package size:"
+          echo "✅ Cleaned deployment package"
+          echo "📦 Package size:"
           du -sh .
+          echo "📋 Top 10 largest files/directories:"
+          du -sh * | sort -hr | head -10
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -83,7 +90,7 @@ jobs:
       
       - name: Debug - Check and prepare artifact structure
         run: |
-          echo "Current directory contents after download:"
+          echo "📥 Current directory contents after download:"
           ls -la
           # GitHub Actions may extract artifacts into a subfolder named after the artifact
           # Find where package.json actually is
@@ -103,21 +110,19 @@ jobs:
             find . -name "package.json" -type f
             exit 1;
           fi
-          echo "Verifying final structure:"
+          # Final cleanup - remove node_modules if accidentally included
+          if [ -d "node_modules" ]; then
+            echo "⚠️ node_modules found (removing to reduce package size)...";
+            rm -rf node_modules
+          fi
+          
+          echo "📋 Verifying final structure:"
           ls -la
+          echo ""
           if [ -f "package.json" ]; then
             echo "✅ package.json confirmed at root";
-            echo "Package.json start script:"
+            echo "📝 Package.json start script:"
             grep -A 1 '"start"' package.json || echo "Start script not found in package.json"
-          fi
-          if [ -d "node_modules" ]; then
-            echo "⚠️ node_modules found (will be excluded from deployment)";
-            echo "node_modules size:"
-            du -sh node_modules/ | head -1
-            echo "Removing node_modules to reduce package size..."
-            rm -rf node_modules
-          else
-            echo "✅ node_modules excluded (Azure will install dependencies)";
           fi
           if [ -f "src/index.js" ]; then
             echo "✅ src/index.js found (entry point)";
@@ -125,13 +130,16 @@ jobs:
             echo "❌ src/index.js not found!";
             exit 1;
           fi
-          # Check for web.config (Windows deployment) - remove if deploying to Linux
           if [ -f "web.config" ]; then
-            echo "⚠️ web.config found (for Windows/IIS deployment)";
-            echo "If deploying to Linux App Service, remove web.config in the prepare step";
+            echo "✅ web.config found (for Windows/IIS deployment)";
+          else
+            echo "⚠️ web.config not found (may be needed for Windows deployment)";
           fi
-          echo "Total package size:"
+          echo ""
+          echo "📦 Final package size:"
           du -sh .
+          echo "📊 Top 10 largest files/directories:"
+          du -sh * 2>/dev/null | sort -hr | head -10
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -140,12 +148,28 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A991E240EF384A70891F3517360891DE }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2276E1689CF5423891BDA354FAC31928 }}
       
+      - name: Create deployment zip
+        run: |
+          echo "📦 Creating deployment zip file..."
+          zip -r deploy.zip . -q -x "*.git*" "*.DS_Store" "*.log"
+          echo "✅ Deployment zip created"
+          ls -lh deploy.zip
+          ZIP_SIZE=$(du -sm deploy.zip | cut -f1)
+          echo "📏 Zip file size: ${ZIP_SIZE}MB"
+          # Warn if zip is larger than 50MB (Azure OneDeploy recommends < 50MB)
+          if [ "$ZIP_SIZE" -gt 50 ]; then
+            echo "⚠️ WARNING: Zip file is ${ZIP_SIZE}MB, which is larger than recommended 50MB"
+            echo "💡 This may cause OneDeploy to fail. Consider excluding more files."
+          else
+            echo "✅ Zip file size is within recommended limits (< 50MB)"
+          fi
+      
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: 'Maya'
           slot-name: 'Production'
-          package: . # Package is now at root after structure check/preparation
+          package: deploy.zip # Use explicit zip file for OneDeploy
           # Azure will automatically run 'npm install --production' after deployment
           
