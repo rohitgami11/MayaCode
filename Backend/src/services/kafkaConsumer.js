@@ -16,6 +16,10 @@ class KafkaConsumerService {
       return;
     }
 
+    if (!consumer) {
+      throw new Error('Kafka consumer not configured. Set KAFKA_BROKERS environment variable.');
+    }
+
     try {
       // Subscribe to chat messages topic
       await consumer.subscribe({ 

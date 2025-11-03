@@ -18,12 +18,14 @@ module.exports = (io, socket, pub) => {
       // Send to Kafka for persistence (async, non-blocking)
       const kafkaMessage = await messageService.sendMessageToKafka(messageData);
       
-      // Send to Redis for immediate delivery to online users
-      pub.publish("CHAT_MESSAGES", JSON.stringify({
-        ...data,
-        id: kafkaMessage.id,
-        timestamp: kafkaMessage.timestamp
-      }));
+      // Send to Redis for immediate delivery to online users (only if Redis is configured)
+      if (pub) {
+        pub.publish("CHAT_MESSAGES", JSON.stringify({
+          ...data,
+          id: kafkaMessage.id,
+          timestamp: kafkaMessage.timestamp
+        }));
+      }
 
       // Send delivery confirmation to sender
       console.log("Message processed and sent to Kafka:", kafkaMessage.id);

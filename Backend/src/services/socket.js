@@ -3,19 +3,27 @@ const Redis = require("ioredis");
 // const prismaClient = require("./prisma");
 // const { produceMessage } = require("./kafka");
 
-const pub = new Redis({
-  host: process.env.VALKEY_HOST,
-  port: process.env.VALKEY_PORT,
-  username: process.env.VALKEY_USERNAME,
-  password: process.env.VALKEY_PASSWORD,
-});
+// Only create Redis clients if VALKEY_HOST is configured
+let pub = null;
+let sub = null;
 
-const sub = new Redis({
-  host: process.env.VALKEY_HOST,
-  port: process.env.VALKEY_PORT,
-  username: process.env.VALKEY_USERNAME,
-  password: process.env.VALKEY_PASSWORD,
-});
+if (process.env.VALKEY_HOST) {
+  pub = new Redis({
+    host: process.env.VALKEY_HOST,
+    port: process.env.VALKEY_PORT,
+    username: process.env.VALKEY_USERNAME,
+    password: process.env.VALKEY_PASSWORD,
+  });
+
+  sub = new Redis({
+    host: process.env.VALKEY_HOST,
+    port: process.env.VALKEY_PORT,
+    username: process.env.VALKEY_USERNAME,
+    password: process.env.VALKEY_PASSWORD,
+  });
+} else {
+  console.warn('⚠️ VALKEY_HOST not configured. Redis pub/sub will not work.');
+}
 
 class SocketService {
   
@@ -29,7 +37,9 @@ class SocketService {
         },
       }
     );
-    sub.subscribe("MESSAGES");
+    if (sub) {
+      sub.subscribe("MESSAGES");
+    }
   }
 
   initListeners() {
@@ -40,19 +50,23 @@ class SocketService {
       console.log(`New Socket Connected`, socket.id);
       socket.on("event:message", async ({ message }) => {
         console.log("New Message Rec.", message);
-        // publish this message to redis
-        await pub.publish("MESSAGES", JSON.stringify({ message }));
+        // publish this message to redis (only if Redis is configured)
+        if (pub) {
+          await pub.publish("MESSAGES", JSON.stringify({ message }));
+        }
       });
     });
 
-    sub.on("message", async (channel, message) => {
-      if (channel === "MESSAGES") {
-        console.log("new message from redis", message);
-        io.emit("message", message);
-        await produceMessage(message);
-        console.log("Message Produced to Kafka Broker");
-      }
-    });
+    if (sub) {
+      sub.on("message", async (channel, message) => {
+        if (channel === "MESSAGES") {
+          console.log("new message from redis", message);
+          io.emit("message", message);
+          // await produceMessage(message);
+          // console.log("Message Produced to Kafka Broker");
+        }
+      });
+    }
   }
 
   get io() {

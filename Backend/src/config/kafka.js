@@ -2,34 +2,44 @@ const { Kafka } = require('kafkajs');
 const fs = require('fs');
 const path = require('path');
 
-// Create Kafka instance
-const kafka = new Kafka({
-  brokers: [process.env.KAFKA_BROKERS],
-  ssl: {
-    ca: [process.env.KAFKA_CA_CERTIFICATE],
-    rejectUnauthorized: false,
-  },
-  sasl: {
-    mechanism: "plain",
-    username: process.env.KAFKA_SASL_USERNAME,
-    password: process.env.KAFKA_SASL_PASSWORD
-  }
-});
+// Create Kafka instance only if KAFKA_BROKERS is configured
+let kafka = null;
+if (process.env.KAFKA_BROKERS) {
+  kafka = new Kafka({
+    brokers: [process.env.KAFKA_BROKERS],
+    ssl: {
+      ca: [process.env.KAFKA_CA_CERTIFICATE],
+      rejectUnauthorized: false,
+    },
+    sasl: {
+      mechanism: "plain",
+      username: process.env.KAFKA_SASL_USERNAME,
+      password: process.env.KAFKA_SASL_PASSWORD
+    }
+  });
+} else {
+  console.warn('⚠️ KAFKA_BROKERS not configured. Kafka will not be available.');
+}
 
-// Producer for sending messages to Kafka
-const producer = kafka.producer({
-  allowAutoTopicCreation: true,
-  transactionTimeout: 30000
-});
+// Producer for sending messages to Kafka (only if Kafka is configured)
+let producer = null;
+let consumer = null;
 
-// Consumer for processing messages from Kafka
-const consumer = kafka.consumer({
-  groupId: process.env.KAFKA_CONSUMER_GROUP_ID || 'mayacode-chat-group',
-  retry: {
-    initialRetryTime: 100,
-    retries: 8
-  }
-});
+if (kafka) {
+  producer = kafka.producer({
+    allowAutoTopicCreation: true,
+    transactionTimeout: 30000
+  });
+
+  // Consumer for processing messages from Kafka
+  consumer = kafka.consumer({
+    groupId: process.env.KAFKA_CONSUMER_GROUP_ID || 'mayacode-chat-group',
+    retry: {
+      initialRetryTime: 100,
+      retries: 8
+    }
+  });
+}
 
 // Topic names
 const TOPICS = {
@@ -39,6 +49,9 @@ const TOPICS = {
 
 // Initialize producer
 const initializeProducer = async () => {
+  if (!producer) {
+    throw new Error('Kafka producer not configured. Set KAFKA_BROKERS environment variable.');
+  }
   try {
     await producer.connect();
     console.log('✅ Kafka producer connected successfully');
@@ -54,6 +67,9 @@ const initializeProducer = async () => {
 
 // Initialize consumer
 const initializeConsumer = async () => {
+  if (!consumer) {
+    throw new Error('Kafka consumer not configured. Set KAFKA_BROKERS environment variable.');
+  }
   try {
     await consumer.connect();
     console.log('✅ Kafka consumer connected successfully');
@@ -65,6 +81,10 @@ const initializeConsumer = async () => {
 
 // Send message to Kafka
 const sendMessage = async (topic, message, key = null) => {
+  if (!producer) {
+    console.warn('⚠️ Kafka producer not configured. Message not sent.');
+    return;
+  }
   try {
     await producer.send({
       topic,
@@ -82,6 +102,7 @@ const sendMessage = async (topic, message, key = null) => {
 
 // Disconnect producer
 const disconnectProducer = async () => {
+  if (!producer) return;
   try {
     await producer.disconnect();
     console.log('✅ Kafka producer disconnected');
@@ -92,6 +113,7 @@ const disconnectProducer = async () => {
 
 // Disconnect consumer
 const disconnectConsumer = async () => {
+  if (!consumer) return;
   try {
     await consumer.disconnect();
     console.log('✅ Kafka consumer disconnected');
