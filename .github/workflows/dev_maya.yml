@@ -46,34 +46,25 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Exclude node_modules and unnecessary files to reduce package size
-          echo "🧹 Cleaning up deployment package..."
+          # Remove node_modules, logs, and unnecessary files to reduce package size
+          # Azure will install node_modules automatically during deployment
           rm -rf node_modules
           rm -rf logs
           rm -rf .git
-          rm -rf .expo
-          rm -rf .cache
           find . -name "*.log" -type f -delete
           find . -name ".DS_Store" -type f -delete
-          find . -name "*.md" -not -name "package.json" -type f -delete || true
-          # Remove test files if they exist
-          find . -name "*.test.js" -type f -delete || true
-          find . -name "*.spec.js" -type f -delete || true
-          # Note: web.config is for Windows IIS deployment
-          # If your Azure App Service is Linux-based, uncomment the next line:
+          # Note: web.config is kept for Windows deployment (remove if Linux)
+          # If deploying to Linux, uncomment the next line:
           # rm -f web.config
-          # For Windows App Service, keep web.config
-          echo "✅ Cleaned deployment package"
-          echo "📦 Package size:"
+          echo "Prepared package (excluded node_modules - Azure will install them)"
+          echo "Package size:"
           du -sh .
-          echo "📋 Top 10 largest files/directories:"
-          du -sh * | sort -hr | head -10
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ./Backend  # Uploads Backend directory contents (package.json, src/, etc.)
+          path: ./Backend
 
   deploy:
     runs-on: ubuntu-latest
@@ -88,127 +79,18 @@ jobs:
         with:
           name: node-app
       
-      - name: Debug - Check and prepare artifact structure
+      - name: Debug - Check artifact structure
         run: |
-          echo "📥 Current directory contents after download:"
+          echo "Current directory contents after download:"
           ls -la
-          echo ""
-          echo "🔍 Searching for package.json..."
-          
-          # Find package.json anywhere in the directory tree
-          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f | head -1)
-          
-          if [ -z "$PACKAGE_JSON_PATH" ]; then
-            echo "❌ ERROR: package.json not found anywhere!";
-            echo "Directory structure:"
-            find . -type d | head -20
-            exit 1;
+          if [ -f "package.json" ]; then 
+            echo "✅ package.json found"; 
+          else 
+            echo "❌ package.json not found!"; 
+            exit 1; 
           fi
-          
-          echo "✅ Found package.json at: $PACKAGE_JSON_PATH"
-          
-          # If package.json is already at root, no flattening needed
-          if [ "$PACKAGE_JSON_PATH" = "./package.json" ]; then
-            echo "✅ package.json already at root - no flattening needed";
-          else
-            # Get the directory containing package.json
-            PACKAGE_DIR=$(dirname "$PACKAGE_JSON_PATH")
-            echo "📦 package.json is in directory: $PACKAGE_DIR"
-            
-            # Count how many levels deep
-            DEPTH=$(echo "$PACKAGE_DIR" | tr -cd '/' | wc -c)
-            echo "📏 Depth: $DEPTH levels"
-            
-            # Flatten: move all contents from package.json directory to root
-            if [ "$PACKAGE_DIR" != "." ]; then
-              echo "🔄 Flattening structure: moving contents from $PACKAGE_DIR to root..."
-              
-              # Normalize the path (remove leading ./)
-              PACKAGE_DIR="${PACKAGE_DIR#./}"
-              
-              # Move all files and directories from package.json directory to root
-              # Use a loop to handle all items including hidden files
-              shopt -s dotglob nullglob
-              for item in "$PACKAGE_DIR"/* "$PACKAGE_DIR"/.[!.]* "$PACKAGE_DIR"/..?*; do
-                if [ -e "$item" ] || [ -L "$item" ]; then
-                  mv "$item" . 2>/dev/null || true
-                fi
-              done
-              shopt -u dotglob nullglob
-              
-              # Remove empty directories (going from deepest to shallowest)
-              # Try multiple times to handle nested empty directories
-              for i in {1..5}; do
-                find . -type d -empty -delete 2>/dev/null || true
-              done
-              
-              echo "✅ Flattening complete"
-            fi
-          fi
-          
-          # Verify package.json is now at root
-          if [ ! -f "package.json" ]; then
-            echo "❌ ERROR: package.json still not at root after flattening!";
-            echo "Current directory contents:"
-            ls -la
-            echo ""
-            echo "Searching for package.json again:"
-            find . -name "package.json" -type f
-            exit 1;
-          fi
-          
-          echo "✅ Confirmed: package.json is at root"
-          
-          # Show structure after flattening for debugging
-          echo "📂 Directory structure after flattening:"
-          find . -maxdepth 2 -type d | sort
-          echo ""
-          
-          # Final cleanup - remove node_modules if accidentally included
-          if [ -d "node_modules" ]; then
-            echo "⚠️ node_modules found (removing to reduce package size)...";
-            rm -rf node_modules
-          fi
-          
-          # Check for any leftover nested directories that might indicate incomplete flattening
-          REMAINING_NESTED=$(find . -mindepth 2 -name "package.json" -type f 2>/dev/null | wc -l)
-          if [ "$REMAINING_NESTED" -gt 0 ]; then
-            echo "⚠️ WARNING: Found $REMAINING_NESTED package.json files in nested directories!"
-            find . -name "package.json" -type f
-          fi
-          
-          echo "📋 Verifying final structure:"
-          ls -la
-          echo ""
-          if [ -f "package.json" ]; then
-            echo "✅ package.json confirmed at root";
-            echo "📝 Package.json start script:"
-            grep -A 1 '"start"' package.json || echo "Start script not found in package.json"
-          fi
-          if [ -f "src/index.js" ]; then
-            echo "✅ src/index.js found (entry point)";
-          else
-            echo "❌ src/index.js not found at root/src/index.js!";
-            echo "Searching for index.js files:"
-            find . -name "index.js" -type f
-            echo ""
-            echo "Checking if src directory exists:"
-            ls -la src/ 2>/dev/null || echo "src/ directory not found"
-            echo ""
-            echo "Current directory structure:"
-            find . -type d -maxdepth 2 | head -20
-            exit 1;
-          fi
-          if [ -f "web.config" ]; then
-            echo "✅ web.config found (for Windows/IIS deployment)";
-          else
-            echo "⚠️ web.config not found (may be needed for Windows deployment)";
-          fi
-          echo ""
-          echo "📦 Final package size:"
+          echo "Package size:"
           du -sh .
-          echo "📊 Top 10 largest files/directories:"
-          du -sh * 2>/dev/null | sort -hr | head -10
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -217,28 +99,14 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A991E240EF384A70891F3517360891DE }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2276E1689CF5423891BDA354FAC31928 }}
       
-      - name: Create deployment zip
-        run: |
-          echo "📦 Creating deployment zip file..."
-          zip -r deploy.zip . -q -x "*.git*" "*.DS_Store" "*.log"
-          echo "✅ Deployment zip created"
-          ls -lh deploy.zip
-          ZIP_SIZE=$(du -sm deploy.zip | cut -f1)
-          echo "📏 Zip file size: ${ZIP_SIZE}MB"
-          # Warn if zip is larger than 50MB (Azure OneDeploy recommends < 50MB)
-          if [ "$ZIP_SIZE" -gt 50 ]; then
-            echo "⚠️ WARNING: Zip file is ${ZIP_SIZE}MB, which is larger than recommended 50MB"
-            echo "💡 This may cause OneDeploy to fail. Consider excluding more files."
-          else
-            echo "✅ Zip file size is within recommended limits (< 50MB)"
-          fi
-      
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: 'Maya'
           slot-name: 'Production'
-          package: deploy.zip # Use explicit zip file for OneDeploy
-          # Azure will automatically run 'npm install --production' after deployment
+          package: . # Point to the current directory where artifact was downloaded
+          # Explicitly set the app setting as an input to the action for clarity and reliability
+          app-settings: |
+            SCM_DO_BUILD_DURING_DEPLOYMENT=true
           
