@@ -81,28 +81,18 @@ jobs:
       
       - name: Debug - Check artifact structure
         run: |
-          echo "Current directory contents:"
+          echo "Current directory contents after download:"
           ls -la
-          echo "Checking for package.json:"
+          # The artifact is already the contents of the Backend folder, no need to move
           if [ -f "package.json" ]; then
-            echo "✅ package.json found at root"
-          elif [ -f "Backend/package.json" ]; then
-            echo "✅ package.json found in Backend folder"
-            echo "Moving Backend contents to root..."
-            shopt -s dotglob
-            mv Backend/* .
-            rmdir Backend 2>/dev/null || true
-            echo "Contents after move:"
-            ls -la
+            echo "✅ package.json found at root of artifact"
           else
-            echo "❌ package.json not found!"
+            echo "❌ package.json not found at root of artifact!"
             find . -name "package.json" -type f
             exit 1
           fi
           echo "Package size:"
           du -sh .
-          echo "Verifying package.json content:"
-          cat package.json | head -15
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -113,16 +103,13 @@ jobs:
 
       - name: Get App Service details
         run: |
-          echo "Listing all web apps to find resource group..."
-          az webapp list --query "[?name=='Maya'].{name:name, resourceGroup:resourceGroup, state:state}" -o table
+          # Add this step to ensure the RESOURCE_GROUP variable is set correctly for subsequent steps
           RESOURCE_GROUP=$(az webapp list --query "[?name=='Maya'].resourceGroup" -o tsv | head -1)
           if [ -z "$RESOURCE_GROUP" ]; then
-            echo "Could not find resource group. Trying alternative method..."
             RESOURCE_GROUP=$(az resource list --name Maya --resource-type "Microsoft.Web/sites" --query "[0].resourceGroup" -o tsv)
           fi
           if [ -z "$RESOURCE_GROUP" ]; then
             echo "Error: Could not determine resource group for app 'Maya'"
-            echo "Please check the app name and ensure you have proper permissions"
             exit 1
           fi
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_ENV
@@ -131,7 +118,7 @@ jobs:
       
       - name: Configure App Service to build during deployment
         run: |
-          # Set app setting to install dependencies during deployment
+          # Set app setting to install dependencies during deployment using Oryx
           az webapp config appsettings set \
             --name Maya \
             --resource-group "$RESOURCE_GROUP" \
@@ -148,20 +135,11 @@ jobs:
           echo "Waiting 5 seconds for service to be ready..."
           sleep 5
       
-      - name: Create deployment zip
-        run: |
-          # Exclude node_modules from zip (Azure will install them)
-          # Note: web.config is included for Windows deployment (remove from exclusion if Windows)
-          # If deploying to Linux, add "web.config" to exclusion list
-          zip -r deploy.zip . -q -x "node_modules/*" "*.git*" "*.log" "*.DS_Store"
-          echo "Zip file created, size:"
-          ls -lh deploy.zip
-      
-      - name: Deploy using GitHub Action (recommended)
+      - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: 'Maya'
           slot-name: 'Production'
-          package: deploy.zip
+          package: . # Point to the current directory where artifact was downloaded
           
