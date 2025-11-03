@@ -53,8 +53,9 @@ jobs:
           rm -rf .git
           find . -name "*.log" -type f -delete
           find . -name ".DS_Store" -type f -delete
-          # Remove web.config for Linux deployment
-          rm -f web.config
+          # Note: web.config is kept for Windows deployment (remove if Linux)
+          # If deploying to Linux, uncomment the next line:
+          # rm -f web.config
           echo "Prepared package (excluded node_modules - Azure will install them)"
           echo "Package size:"
           du -sh .
@@ -150,7 +151,9 @@ jobs:
       - name: Create deployment zip
         run: |
           # Exclude node_modules from zip (Azure will install them)
-          zip -r deploy.zip . -q -x "node_modules/*" "*.git*" "*.log" "*.DS_Store" "web.config"
+          # Note: web.config is included for Windows deployment (remove from exclusion if Windows)
+          # If deploying to Linux, add "web.config" to exclusion list
+          zip -r deploy.zip . -q -x "node_modules/*" "*.git*" "*.log" "*.DS_Store"
           echo "Zip file created, size:"
           ls -lh deploy.zip
       
