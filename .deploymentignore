@@ -1,0 +1,44 @@
+# Exclude Frontend (React Native app - not needed on Azure App Service)
+# The Frontend is a mobile app that should be deployed separately via Expo/App Store
+Frontend/
+
+# Exclude node_modules (will be installed on Azure via npm install)
+**/node_modules/
+
+# Exclude development files
+**/.git/
+**/.gitignore
+**/.DS_Store
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.log
+
+# Exclude environment files (should be configured in Azure App Settings)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Exclude build artifacts and development directories
+**/build/
+**/dist/
+**/.expo/
+**/.next/
+**/.cache/
+
+# Exclude test files
+**/__tests__/
+**/*.test.js
+**/*.test.ts
+**/*.test.jsx
+**/*.test.tsx
+**/*.spec.js
+**/*.spec.ts
+
+# Exclude documentation (optional - reduces size)
+**/README.md
+**/docs/
+
+# Exclude development scripts (optional - keep if needed)
+# **/scripts/
+
