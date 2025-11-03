@@ -46,9 +46,8 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Remove node_modules, logs, and unnecessary files to reduce package size
-          # Azure will install node_modules automatically during deployment
-          rm -rf node_modules
+          # Keep node_modules - deploying self-contained package
+          # Remove only logs and unnecessary files to reduce package size
           rm -rf logs
           rm -rf .git
           find . -name "*.log" -type f -delete
@@ -56,7 +55,7 @@ jobs:
           # Note: web.config is kept for Windows deployment (remove if Linux)
           # If deploying to Linux, uncomment the next line:
           # rm -f web.config
-          echo "Prepared package (excluded node_modules - Azure will install them)"
+          echo "Prepared self-contained package (includes node_modules)"
           echo "Package size:"
           du -sh .
       
@@ -89,6 +88,12 @@ jobs:
             echo "❌ package.json not found!"; 
             exit 1; 
           fi
+          if [ -d "node_modules" ]; then
+            echo "✅ node_modules found (self-contained package)";
+          else
+            echo "❌ node_modules not found!";
+            exit 1;
+          fi
           echo "Package size:"
           du -sh .
       
@@ -106,7 +111,5 @@ jobs:
           app-name: 'Maya'
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
-          # Explicitly set the app setting as an input to the action for clarity and reliability
-          app-settings: |
-            SCM_DO_BUILD_DURING_DEPLOYMENT=true
+          # Self-contained package deployed - no build needed on Azure
           
