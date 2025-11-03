@@ -46,8 +46,10 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Keep node_modules - deploying self-contained package
-          # Remove only logs and unnecessary files to reduce package size
+          # Exclude node_modules - Azure will install dependencies automatically
+          # This significantly reduces package size and prevents disk space errors
+          echo "Removing node_modules to reduce package size..."
+          rm -rf node_modules
           rm -rf logs
           rm -rf .git
           find . -name "*.log" -type f -delete
@@ -56,7 +58,7 @@ jobs:
           # If your Azure App Service is Linux-based, uncomment the next line:
           # rm -f web.config
           # For Windows App Service, keep web.config
-          echo "Prepared self-contained package (includes node_modules)"
+          echo "✅ Prepared deployment package (node_modules excluded - Azure will install)"
           echo "Package size:"
           du -sh .
       
@@ -109,12 +111,13 @@ jobs:
             grep -A 1 '"start"' package.json || echo "Start script not found in package.json"
           fi
           if [ -d "node_modules" ]; then
-            echo "✅ node_modules found (self-contained package)";
+            echo "⚠️ node_modules found (will be excluded from deployment)";
             echo "node_modules size:"
             du -sh node_modules/ | head -1
+            echo "Removing node_modules to reduce package size..."
+            rm -rf node_modules
           else
-            echo "❌ node_modules not found!";
-            exit 1;
+            echo "✅ node_modules excluded (Azure will install dependencies)";
           fi
           if [ -f "src/index.js" ]; then
             echo "✅ src/index.js found (entry point)";
@@ -144,5 +147,5 @@ jobs:
           app-name: 'Maya'
           slot-name: 'Production'
           package: . # Package is now at root after structure check/preparation
-          # Self-contained package deployed - no build needed on Azure
+          # Azure will automatically run 'npm install --production' after deployment
           
