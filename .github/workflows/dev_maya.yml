@@ -52,9 +52,10 @@ jobs:
           rm -rf .git
           find . -name "*.log" -type f -delete
           find . -name ".DS_Store" -type f -delete
-          # Note: web.config is kept for Windows deployment (remove if Linux)
-          # If deploying to Linux, uncomment the next line:
+          # Note: web.config is for Windows IIS deployment
+          # If your Azure App Service is Linux-based, uncomment the next line:
           # rm -f web.config
+          # For Windows App Service, keep web.config
           echo "Prepared self-contained package (includes node_modules)"
           echo "Package size:"
           du -sh .
@@ -78,23 +79,55 @@ jobs:
         with:
           name: node-app
       
-      - name: Debug - Check artifact structure
+      - name: Debug - Check and prepare artifact structure
         run: |
           echo "Current directory contents after download:"
           ls -la
+          # GitHub Actions may extract artifacts into a subfolder named after the artifact
+          # Find where package.json actually is
           if [ -f "package.json" ]; then 
-            echo "✅ package.json found"; 
-          else 
-            echo "❌ package.json not found!"; 
-            exit 1; 
+            echo "✅ package.json found at root";
+            DEPLOY_PATH=".";
+          elif [ -d "node-app" ] && [ -f "node-app/package.json" ]; then
+            echo "✅ package.json found in node-app folder, moving to root...";
+            # Move contents to root for consistent deployment
+            shopt -s dotglob
+            mv node-app/* .
+            rmdir node-app 2>/dev/null || true
+            DEPLOY_PATH=".";
+          else
+            echo "❌ package.json not found!";
+            echo "Searching for package.json:";
+            find . -name "package.json" -type f
+            exit 1;
+          fi
+          echo "Verifying final structure:"
+          ls -la
+          if [ -f "package.json" ]; then
+            echo "✅ package.json confirmed at root";
+            echo "Package.json start script:"
+            grep -A 1 '"start"' package.json || echo "Start script not found in package.json"
           fi
           if [ -d "node_modules" ]; then
             echo "✅ node_modules found (self-contained package)";
+            echo "node_modules size:"
+            du -sh node_modules/ | head -1
           else
             echo "❌ node_modules not found!";
             exit 1;
           fi
-          echo "Package size:"
+          if [ -f "src/index.js" ]; then
+            echo "✅ src/index.js found (entry point)";
+          else
+            echo "❌ src/index.js not found!";
+            exit 1;
+          fi
+          # Check for web.config (Windows deployment) - remove if deploying to Linux
+          if [ -f "web.config" ]; then
+            echo "⚠️ web.config found (for Windows/IIS deployment)";
+            echo "If deploying to Linux App Service, remove web.config in the prepare step";
+          fi
+          echo "Total package size:"
           du -sh .
       
       - name: Login to Azure
@@ -110,6 +143,6 @@ jobs:
         with:
           app-name: 'Maya'
           slot-name: 'Production'
-          package: . # Point to the current directory where artifact was downloaded
+          package: . # Package is now at root after structure check/preparation
           # Self-contained package deployed - no build needed on Azure
           
