@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ./Backend
+          path: ./Backend  # Uploads Backend directory contents (package.json, src/, etc.)
 
   deploy:
     runs-on: ubuntu-latest
@@ -92,24 +92,46 @@ jobs:
         run: |
           echo "📥 Current directory contents after download:"
           ls -la
-          # GitHub Actions may extract artifacts into a subfolder named after the artifact
-          # Find where package.json actually is
-          if [ -f "package.json" ]; then 
-            echo "✅ package.json found at root";
-            DEPLOY_PATH=".";
+          echo ""
+          echo "🔍 Searching for package.json in various locations..."
+          
+          # GitHub Actions may extract artifacts into different folder structures
+          # Handle all possible cases: root, node-app/, node-app/Backend/, or Backend/
+          
+          if [ -f "package.json" ]; then
+            echo "✅ package.json found at root - no flattening needed";
           elif [ -d "node-app" ] && [ -f "node-app/package.json" ]; then
-            echo "✅ package.json found in node-app folder, moving to root...";
-            # Move contents to root for consistent deployment
+            echo "✅ package.json found in node-app/, flattening to root...";
             shopt -s dotglob
             mv node-app/* .
             rmdir node-app 2>/dev/null || true
-            DEPLOY_PATH=".";
+          elif [ -d "node-app" ] && [ -d "node-app/Backend" ] && [ -f "node-app/Backend/package.json" ]; then
+            echo "✅ package.json found in node-app/Backend/, flattening to root...";
+            shopt -s dotglob
+            mv node-app/Backend/* .
+            rmdir node-app/Backend 2>/dev/null || true
+            rmdir node-app 2>/dev/null || true
+          elif [ -d "Backend" ] && [ -f "Backend/package.json" ]; then
+            echo "✅ package.json found in Backend/, flattening to root...";
+            shopt -s dotglob
+            mv Backend/* .
+            rmdir Backend 2>/dev/null || true
           else
-            echo "❌ package.json not found!";
-            echo "Searching for package.json:";
+            echo "❌ package.json not found in expected locations!";
+            echo "Searching recursively for package.json:"
             find . -name "package.json" -type f
+            echo ""
+            echo "Current directory structure:"
+            find . -type f -name "package.json" -o -type d -name "src" | head -20
             exit 1;
           fi
+          
+          # Verify package.json is now at root
+          if [ ! -f "package.json" ]; then
+            echo "❌ ERROR: package.json still not at root after flattening!";
+            exit 1;
+          fi
+          echo "✅ Confirmed: package.json is at root"
           # Final cleanup - remove node_modules if accidentally included
           if [ -d "node_modules" ]; then
             echo "⚠️ node_modules found (removing to reduce package size)...";
@@ -127,7 +149,15 @@ jobs:
           if [ -f "src/index.js" ]; then
             echo "✅ src/index.js found (entry point)";
           else
-            echo "❌ src/index.js not found!";
+            echo "❌ src/index.js not found at root/src/index.js!";
+            echo "Searching for index.js files:"
+            find . -name "index.js" -type f
+            echo ""
+            echo "Checking if src directory exists:"
+            ls -la src/ 2>/dev/null || echo "src/ directory not found"
+            echo ""
+            echo "Current directory structure:"
+            find . -type d -maxdepth 2 | head -20
             exit 1;
           fi
           if [ -f "web.config" ]; then
