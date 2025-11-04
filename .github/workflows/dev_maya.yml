@@ -46,14 +46,14 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Remove dev dependencies and reinstall only production dependencies
-          rm -rf node_modules
-          npm ci --production --prefer-offline --no-audit
-          
           # Clean up unnecessary files
-          rm -rf logs .git
+          rm -rf logs .git node_modules
           find . -name "*.log" -type f -delete
           find . -name ".DS_Store" -type f -delete
+          
+          # Ensure package.json and package-lock.json exist for Azure to install dependencies
+          [ ! -f "package.json" ] && (echo "ERROR: package.json missing"; exit 1)
+          [ ! -f "package-lock.json" ] && (echo "ERROR: package-lock.json missing"; exit 1)
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -130,7 +130,10 @@ jobs:
           az webapp config appsettings set \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+              WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
+              SCM_COMMAND_IDLE_TIMEOUT=600 \
             --output none
           az webapp config set \
             --name Maya \
