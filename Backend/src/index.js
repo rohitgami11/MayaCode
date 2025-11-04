@@ -1,3 +1,14 @@
+// IMMEDIATE STARTUP LOGGING - Write to stderr immediately to ensure iisnode captures it
+// Use process.stderr.write for immediate output that iisnode can capture
+process.stderr.write("=".repeat(50) + "\n");
+process.stderr.write("🚀 MayaCode Backend - Starting...\n");
+process.stderr.write("=".repeat(50) + "\n");
+process.stderr.write(`📋 Node.js Version: ${process.version}\n`);
+process.stderr.write(`📋 Process PID: ${process.pid}\n`);
+process.stderr.write(`📋 Working Directory: ${process.cwd()}\n`);
+process.stderr.write(`📋 __dirname: ${__dirname}\n`);
+process.stderr.write("=".repeat(50) + "\n");
+
 // Add error handling for missing dependencies
 // Check if node_modules exists (warn but don't exit - actual requires will fail if missing)
 try {
@@ -32,7 +43,15 @@ try {
 }
 
 // Add global error handlers BEFORE loading modules
+// Use stderr.write for immediate output
 process.on('uncaughtException', (error) => {
+  process.stderr.write("=".repeat(50) + "\n");
+  process.stderr.write("❌ UNCAUGHT EXCEPTION - Application will exit\n");
+  process.stderr.write("=".repeat(50) + "\n");
+  process.stderr.write(`Error: ${error.message}\n`);
+  process.stderr.write(`Stack: ${error.stack}\n`);
+  process.stderr.write("=".repeat(50) + "\n");
+  // Also log to console
   console.error("=".repeat(50));
   console.error("❌ UNCAUGHT EXCEPTION - Application will exit");
   console.error("=".repeat(50));
@@ -40,7 +59,7 @@ process.on('uncaughtException', (error) => {
   console.error("Stack:", error.stack);
   console.error("=".repeat(50));
   // Give time for logs to flush
-  setTimeout(() => process.exit(1), 1000);
+  setTimeout(() => process.exit(1), 2000);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -60,29 +79,47 @@ const http = require("http");
 let app, setupSocket, initializeProducer, initializeConsumer, kafkaConsumerService;
 
 try {
+  process.stderr.write("📦 Loading application modules...\n");
   console.log("📦 Loading application modules...");
+  
   app = require("./app.js");
+  process.stderr.write("✅ app.js loaded\n");
   console.log("✅ app.js loaded");
   
   setupSocket = require("./sockets/index.js").setupSocket;
+  process.stderr.write("✅ sockets/index.js loaded\n");
   console.log("✅ sockets/index.js loaded");
   
   initializeProducer = require("./config/kafka").initializeProducer;
   initializeConsumer = require("./config/kafka").initializeConsumer;
+  process.stderr.write("✅ kafka config loaded\n");
   console.log("✅ kafka config loaded");
   
   kafkaConsumerService = require("./services/kafkaConsumer");
+  process.stderr.write("✅ kafkaConsumer service loaded\n");
   console.log("✅ kafkaConsumer service loaded");
   
   require("dotenv").config();
+  process.stderr.write("✅ dotenv configured\n");
   console.log("✅ dotenv configured");
   
   // Initialize Cloudinary
   require("./config/cloudinary");
+  process.stderr.write("✅ cloudinary config loaded\n");
   console.log("✅ cloudinary config loaded");
   
+  process.stderr.write("✅ All modules loaded successfully\n");
   console.log("✅ All modules loaded successfully");
 } catch (requireError) {
+  // Write to stderr immediately so iisnode captures it
+  process.stderr.write("=".repeat(50) + "\n");
+  process.stderr.write("❌ ERROR: Failed to load required modules!\n");
+  process.stderr.write("=".repeat(50) + "\n");
+  process.stderr.write(`Error message: ${requireError.message}\n`);
+  process.stderr.write(`Error name: ${requireError.name}\n`);
+  process.stderr.write(`Error code: ${requireError.code}\n`);
+  process.stderr.write(`\nStack trace:\n${requireError.stack}\n`);
+  process.stderr.write("=".repeat(50) + "\n");
   console.error("=".repeat(50));
   console.error("❌ ERROR: Failed to load required modules!");
   console.error("=".repeat(50));
@@ -108,16 +145,22 @@ try {
 const PORT = process.env.PORT || process.env.IISNODE_HTTP_PORT || 8000;
 
 // Log startup information for debugging
-console.log("=".repeat(50));
-console.log("🚀 Starting MayaCode Backend Server");
-console.log("=".repeat(50));
-console.log(`📋 PORT: ${PORT}`);
-console.log(`📋 NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
-console.log(`📋 Working Directory: ${process.cwd()}`);
-console.log(`📋 __dirname: ${__dirname}`);
-console.log(`📋 Node.js Version: ${process.version}`);
-console.log(`📋 Process PID: ${process.pid}`);
-console.log("=".repeat(50));
+// Use both stderr and console for maximum visibility
+const startupInfo = [
+  "=".repeat(50),
+  "🚀 Starting MayaCode Backend Server",
+  "=".repeat(50),
+  `📋 PORT: ${PORT}`,
+  `📋 NODE_ENV: ${process.env.NODE_ENV || 'not set'}`,
+  `📋 Working Directory: ${process.cwd()}`,
+  `📋 __dirname: ${__dirname}`,
+  `📋 Node.js Version: ${process.version}`,
+  `📋 Process PID: ${process.pid}`,
+  "=".repeat(50)
+].join("\n");
+
+process.stderr.write(startupInfo + "\n");
+console.log(startupInfo);
 
 const server = http.createServer(app);
 
@@ -203,14 +246,25 @@ process.on('SIGINT', async () => {
 // Start the server
 // For iisnode, listen on the PORT provided by IIS (no host binding needed)
 server.listen(PORT, () => {
-  console.log(`🌐 Server running on PORT: ${PORT}`);
-  console.log(`✅ Node.js process started successfully`);
-  console.log(`📋 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📁 Working directory: ${process.cwd()}`);
+  const successMsg = [
+    `🌐 Server running on PORT: ${PORT}`,
+    `✅ Node.js process started successfully`,
+    `📋 Environment: ${process.env.NODE_ENV || 'development'}`,
+    `📁 Working directory: ${process.cwd()}`
+  ].join("\n");
+  
+  process.stderr.write(successMsg + "\n");
+  console.log(successMsg);
 }).on('error', (error) => {
-  console.error("❌ Failed to start server:", error);
-  console.error("Error code:", error.code);
-  console.error("Error message:", error.message);
+  const errorMsg = [
+    "❌ Failed to start server:",
+    `Error code: ${error.code}`,
+    `Error message: ${error.message}`,
+    `Stack: ${error.stack}`
+  ].join("\n");
+  
+  process.stderr.write(errorMsg + "\n");
+  console.error(errorMsg);
   process.exit(1);
 });
 
