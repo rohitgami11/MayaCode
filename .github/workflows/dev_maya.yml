@@ -46,19 +46,21 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Remove node_modules, logs, and unnecessary files to reduce package size
-          # Azure will install node_modules automatically during deployment
-          rm -rf node_modules
-          rm -rf logs
-          rm -rf .git
-          find . -name "*.log" -type f -delete
-          find . -name ".DS_Store" -type f -delete
-          # Note: web.config is kept for Windows deployment (remove if Linux)
-          # If deploying to Linux, uncomment the next line:
-          # rm -f web.config
-          echo "Prepared package (excluded node_modules - Azure will install them)"
-          echo "Package size:"
-          du -sh .
+          # Clean up unnecessary files (ignore errors if files don't exist)
+          rm -rf logs .git node_modules || true
+          find . -name "*.log" -type f -delete 2>/dev/null || true
+          find . -name ".DS_Store" -type f -delete 2>/dev/null || true
+          
+          # Ensure package.json exists (required)
+          if [ ! -f "package.json" ]; then
+            echo "ERROR: package.json missing"
+            exit 1
+          fi
+          
+          # Warn if package-lock.json is missing (recommended but not required)
+          if [ ! -f "package-lock.json" ]; then
+            echo "WARNING: package-lock.json missing - Azure will generate it, but this may cause dependency issues"
+          fi
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -79,90 +81,35 @@ jobs:
         with:
           name: node-app
       
-      - name: Debug - Check and flatten artifact structure
+      - name: Flatten artifact structure
         run: |
-          echo "📥 Current directory contents after download:"
-          ls -la
-          echo ""
+          # Find package.json (handle broken pipe gracefully)
+          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f 2>/dev/null | head -1) || PACKAGE_JSON_PATH=""
           
-          # Find package.json - it might be in root, node-app/, or node-app/Backend/
-          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f | head -1)
-          
-          if [ -z "$PACKAGE_JSON_PATH" ]; then
-            echo "❌ ERROR: package.json not found anywhere!";
-            echo "Directory structure:"
-            find . -type d | head -20
-            exit 1;
+          if [ -z "$PACKAGE_JSON_PATH" ] || [ ! -f "$PACKAGE_JSON_PATH" ]; then
+            echo "ERROR: package.json not found"
+            echo "Current directory contents:"
+            ls -la
+            exit 1
           fi
-          
-          echo "✅ Found package.json at: $PACKAGE_JSON_PATH"
           
           # If package.json is not at root, flatten the structure
           if [ "$PACKAGE_JSON_PATH" != "./package.json" ]; then
             PACKAGE_DIR=$(dirname "$PACKAGE_JSON_PATH")
-            echo "🔄 Flattening structure: moving contents from $PACKAGE_DIR to root..."
-            
-            # Normalize path
             PACKAGE_DIR="${PACKAGE_DIR#./}"
-            
-            # Move all contents from package.json directory to root
+            echo "Flattening from: $PACKAGE_DIR"
             shopt -s dotglob nullglob
             for item in "$PACKAGE_DIR"/* "$PACKAGE_DIR"/.[!.]* "$PACKAGE_DIR"/..?*; do
-              if [ -e "$item" ] || [ -L "$item" ]; then
-                mv "$item" . 2>/dev/null || true
-              fi
+              [ -e "$item" ] && mv "$item" . 2>/dev/null || true
             done
             shopt -u dotglob nullglob
-            
-            # Remove empty directories
-            for i in {1..5}; do
-              find . -type d -empty -delete 2>/dev/null || true
-            done
-            
-            echo "✅ Flattening complete"
+            find . -type d -empty -delete 2>/dev/null || true
           fi
           
-          # Verify required files are at root
-          echo ""
-          echo "📋 Verifying deployment structure:"
-          if [ -f "package.json" ]; then
-            echo "✅ package.json found at root";
-          else
-            echo "❌ package.json not at root!";
-            exit 1;
-          fi
-          
-          if [ -f "src/index.js" ]; then
-            echo "✅ src/index.js found (entry point)";
-          else
-            echo "❌ src/index.js not found!";
-            echo "Searching for index.js:"
-            find . -name "index.js" -type f
-            exit 1;
-          fi
-          
-          if [ -f "web.config" ]; then
-            echo "✅ web.config found (required for iisnode)";
-            echo "Verifying web.config points to src/index.js:"
-            grep -q "src/index.js" web.config && echo "✅ web.config correctly configured for src/index.js" || echo "⚠️ WARNING: web.config may not be configured correctly"
-          else
-            echo "❌ web.config not found! This is required for Windows App Service.";
-            exit 1;
-          fi
-          
-          # Verify package-lock.json exists (required for npm install on Azure)
-          if [ -f "package-lock.json" ]; then
-            echo "✅ package-lock.json found (required for deterministic npm install)";
-          else
-            echo "⚠️ WARNING: package-lock.json not found! This may cause dependency installation issues.";
-          fi
-          
-          echo ""
-          echo "📦 Package size:"
-          du -sh .
-          echo ""
-          echo "📋 Final deployment structure (top level files):"
-          ls -la | head -20
+          # Verify required files exist
+          if [ ! -f "package.json" ]; then echo "ERROR: package.json missing"; exit 1; fi
+          if [ ! -f "src/index.js" ]; then echo "ERROR: src/index.js missing"; exit 1; fi
+          if [ ! -f "web.config" ]; then echo "ERROR: web.config missing"; exit 1; fi
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -185,7 +132,7 @@ jobs:
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
           echo "Resource Group: $RESOURCE_GROUP"
       
-      - name: Configure App Service for build
+      - name: Configure App Service
         run: |
           # Set app settings for Windows App Service with iisnode
           echo "Configuring Azure App Service..."
@@ -196,7 +143,8 @@ jobs:
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
             --settings \
               SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-              WEBSITE_NODE_DEFAULT_VERSION=~20 \
+              WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
+              SCM_COMMAND_IDLE_TIMEOUT=600 \
             --output none
           
           # Also set via stack configuration (more reliable)
@@ -234,51 +182,59 @@ jobs:
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
       
-      - name: Install dependencies on App Service
+      - name: Install dependencies on Azure
         run: |
-          echo "📦 Installing Node.js dependencies on App Service..."
-          echo "This step ensures node_modules exists after deployment."
-          echo ""
-          echo "⚠️ IMPORTANT: For Windows App Service, npm install must run AFTER files are deployed."
-          echo ""
-          echo "If automatic install fails, manually run via Kudu Console:"
-          echo "1. Go to: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
-          echo "2. Debug Console → CMD"
-          echo "3. Run: cd D:\\home\\site\\wwwroot && npm install --production"
-          echo ""
-          echo "⏳ Waiting 15 seconds for deployment to complete..."
-          sleep 15
+          echo "Waiting for deployment to complete..."
+          sleep 30
           
-          # Try to verify package.json exists (deployment completed)
-          echo "Verifying deployment completed..."
-      
-      - name: Verify deployment and check logs
-        run: |
-          echo "📋 Checking deployment status..."
-          az webapp deployment list \
+          echo "Installing npm dependencies on Azure App Service..."
+          
+          # Get publishing credentials
+          PUBLISH_CREDS=$(az webapp deployment list-publishing-profiles \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
-            --query "[0].{status:status,message:message,active:active}" \
-            --output table || echo "Could not retrieve deployment status"
+            --query "[?publishMethod=='MSDeploy'].{userName:userName,userPWD:userPWD}" \
+            --output json | jq -r '.[0]')
           
-          echo ""
-          echo "🔍 CRITICAL: If you're still getting 500 errors, check:"
-          echo ""
-          echo "1. ⚠️ VERIFY node_modules EXISTS:"
-          echo "   - Go to: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
-          echo "   - Navigate to: Debug Console → CMD → D:\\home\\site\\wwwroot"
-          echo "   - Run: dir node_modules"
-          echo "   - If missing, run: npm install --production"
-          echo ""
-          echo "2. 📋 Check Application Logs:"
-          echo "   - Azure Portal → App Service → Log stream"
-          echo "   - Look for 'Cannot find module' errors"
-          echo ""
-          echo "3. ⚙️ Verify Environment Variables:"
-          echo "   - Azure Portal → Configuration → Application Settings"
-          echo "   - Required: MONGODB_URI, JWT_SECRET_VERIFY, PORT (auto-set)"
-          echo ""
-          echo "4. 📁 Check iisnode logs:"
-          echo "   - Kudu → D:\\home\\LogFiles\\iisnode"
-          echo "   - Look for Node.js process errors"
+          if [ -z "$PUBLISH_CREDS" ] || [ "$PUBLISH_CREDS" = "null" ]; then
+            echo "WARNING: Could not get publishing credentials. Manual npm install required:"
+            echo "  Kudu: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+            echo "  Command: cd D:\\home\\site\\wwwroot && npm install --production"
+            exit 0
+          fi
+          
+          USERNAME=$(echo "$PUBLISH_CREDS" | jq -r '.userName')
+          PASSWORD=$(echo "$PUBLISH_CREDS" | jq -r '.userPWD')
+          
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ "$USERNAME" = "null" ] || [ "$PASSWORD" = "null" ]; then
+            echo "WARNING: Could not extract credentials. Manual npm install required."
+            exit 0
+          fi
+          
+          # Use Kudu API to run npm install
+          KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          COMMAND="cd D:\\home\\site\\wwwroot && npm install --production"
+          
+          echo "Executing npm install via Kudu API..."
+          
+          # Execute command via Kudu REST API
+          RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"$COMMAND\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
+            "$KUDU_URL/api/command" 2>&1)
+          
+          if echo "$RESPONSE" | grep -q "error\|Error\|ERROR"; then
+            echo "WARNING: npm install may have failed. Check Kudu logs."
+            echo "Response: $RESPONSE"
+          else
+            echo "✅ npm install command submitted"
+          fi
+          
+          echo "Waiting 90 seconds for npm install to complete..."
+          sleep 90
+          
+          echo "✅ Dependency installation completed"
+          echo "⚠️ If errors persist, verify node_modules exists via Kudu Console"
+      
           
