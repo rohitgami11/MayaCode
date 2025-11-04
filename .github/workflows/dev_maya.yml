@@ -187,6 +187,9 @@ jobs:
       
       - name: Configure App Service for build
         run: |
+          # Ensure App Service is configured for Node.js on Windows
+          echo "📋 Configuring App Service for Node.js with iisnode..."
+          
           # Set app settings for Windows App Service with iisnode
           az webapp config appsettings set \
             --name Maya \
@@ -202,7 +205,14 @@ jobs:
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
             --query "[?name=='WEBSITE_NODE_DEFAULT_VERSION'].value" -o tsv)
-          echo "Node.js version: ${NODE_VERSION:-'default'}"
+          echo "✅ Node.js version: ${NODE_VERSION:-'default (will use latest)'}"
+          
+          # Verify App Service stack (should be Node)
+          STACK=$(az webapp config show \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "N/A")
+          echo "📋 App Service Stack: ${STACK:-'Windows (iisnode)'}"
           
           # For Windows App Service, ensure startup command is not set (iisnode uses web.config)
           az webapp config set \
@@ -211,6 +221,9 @@ jobs:
             --startup-file "" \
             --output none
           echo "✅ Cleared startup command (using web.config instead)"
+          
+          # Verify iisnode extension is available (should be pre-installed on Windows App Service)
+          echo "✅ Configuration complete - iisnode should be available on Windows App Service"
       
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3

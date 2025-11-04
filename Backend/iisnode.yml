@@ -6,14 +6,16 @@ loggingEnabled: true
 logDirectory: iisnode
 
 # Node.js process configuration
-nodeProcessCommandLine: "node.exe"
+# For Azure App Service, leave empty or use "node.exe" - Azure will find it via PATH
+# Azure uses WEBSITE_NODE_DEFAULT_VERSION to determine which Node.js version to use
+# nodeProcessCommandLine: "node.exe"
 
 # Interceptor configuration
 # This helps with debugging
-interceptor: "iisnode/interceptor/{version}"
+# interceptor: "iisnode/interceptor/{version}"
 
-# Dev server configuration (if needed)
-# devErrorsEnabled: true
+# Dev server configuration
+devErrorsEnabled: true
 
 # Performance tuning
 maxNamedPipeConnectionRetry: 100
