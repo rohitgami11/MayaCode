@@ -1,0 +1,24 @@
+# iisnode configuration file
+# This file helps configure iisnode behavior for your Node.js application
+
+# Logging configuration
+loggingEnabled: true
+logDirectory: iisnode
+
+# Node.js process configuration
+nodeProcessCommandLine: "node.exe"
+
+# Interceptor configuration
+# This helps with debugging
+interceptor: "iisnode/interceptor/{version}"
+
+# Dev server configuration (if needed)
+# devErrorsEnabled: true
+
+# Performance tuning
+maxNamedPipeConnectionRetry: 100
+namedPipeConnectionRetryDelay: 250
+
+# Maximum concurrent requests per process
+maxConcurrentRequestsPerProcess: 1024
+

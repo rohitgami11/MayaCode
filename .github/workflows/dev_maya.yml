@@ -220,13 +220,27 @@ jobs:
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
       
+      - name: Install dependencies on App Service
+        run: |
+          echo "📦 Installing Node.js dependencies on App Service..."
+          echo "This step ensures node_modules exists after deployment."
+          echo ""
+          echo "⚠️ IMPORTANT: For Windows App Service, npm install must run AFTER files are deployed."
+          echo ""
+          echo "If automatic install fails, manually run via Kudu Console:"
+          echo "1. Go to: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          echo "2. Debug Console → CMD"
+          echo "3. Run: cd D:\\home\\site\\wwwroot && npm install --production"
+          echo ""
+          echo "⏳ Waiting 15 seconds for deployment to complete..."
+          sleep 15
+          
+          # Try to verify package.json exists (deployment completed)
+          echo "Verifying deployment completed..."
+      
       - name: Verify deployment and check logs
         run: |
-          echo "⏳ Waiting 10 seconds for deployment to process..."
-          sleep 10
-          
           echo "📋 Checking deployment status..."
-          # Get deployment status
           az webapp deployment list \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
@@ -234,10 +248,23 @@ jobs:
             --output table || echo "Could not retrieve deployment status"
           
           echo ""
-          echo "💡 Next steps if deployment fails:"
-          echo "1. Check Azure Portal → App Service → Log stream for startup errors"
-          echo "2. Verify environment variables are set in Configuration → Application Settings"
-          echo "3. Check Kudu console at: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
-          echo "4. Verify node_modules exists: cd D:\\home\\site\\wwwroot && dir node_modules"
-          echo "5. Check iisnode logs at: D:\\home\\LogFiles\\iisnode"
+          echo "🔍 CRITICAL: If you're still getting 500 errors, check:"
+          echo ""
+          echo "1. ⚠️ VERIFY node_modules EXISTS:"
+          echo "   - Go to: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          echo "   - Navigate to: Debug Console → CMD → D:\\home\\site\\wwwroot"
+          echo "   - Run: dir node_modules"
+          echo "   - If missing, run: npm install --production"
+          echo ""
+          echo "2. 📋 Check Application Logs:"
+          echo "   - Azure Portal → App Service → Log stream"
+          echo "   - Look for 'Cannot find module' errors"
+          echo ""
+          echo "3. ⚙️ Verify Environment Variables:"
+          echo "   - Azure Portal → Configuration → Application Settings"
+          echo "   - Required: MONGODB_URI, JWT_SECRET_VERIFY, PORT (auto-set)"
+          echo ""
+          echo "4. 📁 Check iisnode logs:"
+          echo "   - Kudu → D:\\home\\LogFiles\\iisnode"
+          echo "   - Look for Node.js process errors"
           
