@@ -1,41 +1,106 @@
 // Add error handling for missing dependencies
+// Check if node_modules exists (warn but don't exit - actual requires will fail if missing)
 try {
-  // Check if node_modules exists
   const fs = require("fs");
   const path = require("path");
-  if (!fs.existsSync(path.join(__dirname, "../../node_modules"))) {
-    console.error("❌ ERROR: node_modules directory not found!");
-    console.error("Please run 'npm install --production' in the deployment directory");
-    console.error("Expected location: " + path.join(__dirname, "../../node_modules"));
-    process.exit(1);
+  
+  // Check both possible locations (../node_modules for Azure deployment, ../../node_modules for local)
+  const nodeModulesPath1 = path.join(__dirname, "../node_modules");
+  const nodeModulesPath2 = path.join(__dirname, "../../node_modules");
+  const cwdNodeModules = path.join(process.cwd(), "node_modules");
+  
+  const nodeModulesExists = fs.existsSync(nodeModulesPath1) || 
+                           fs.existsSync(nodeModulesPath2) || 
+                           fs.existsSync(cwdNodeModules);
+  
+  if (!nodeModulesExists) {
+    console.warn("⚠️ WARNING: node_modules directory not found in expected locations!");
+    console.warn("Checked paths:");
+    console.warn("  - " + nodeModulesPath1);
+    console.warn("  - " + nodeModulesPath2);
+    console.warn("  - " + cwdNodeModules);
+    console.warn("Current working directory: " + process.cwd());
+    console.warn("__dirname: " + __dirname);
+    console.warn("⚠️ Continuing anyway - Azure may install dependencies during deployment");
+    console.warn("If modules are missing, require() calls will fail with clear error messages");
+  } else {
+    console.log("✅ node_modules found");
   }
 } catch (checkError) {
-  console.error("❌ Error checking for node_modules:", checkError.message);
+  console.warn("⚠️ Warning: Error checking for node_modules:", checkError.message);
+  console.warn("Continuing anyway...");
 }
+
+// Add global error handlers BEFORE loading modules
+process.on('uncaughtException', (error) => {
+  console.error("=".repeat(50));
+  console.error("❌ UNCAUGHT EXCEPTION - Application will exit");
+  console.error("=".repeat(50));
+  console.error("Error:", error.message);
+  console.error("Stack:", error.stack);
+  console.error("=".repeat(50));
+  // Give time for logs to flush
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error("=".repeat(50));
+  console.error("❌ UNHANDLED PROMISE REJECTION");
+  console.error("=".repeat(50));
+  console.error("Reason:", reason);
+  console.error("Promise:", promise);
+  if (reason && reason.stack) {
+    console.error("Stack:", reason.stack);
+  }
+  console.error("=".repeat(50));
+  // Don't exit on unhandled rejection - log and continue
+});
 
 const http = require("http");
 let app, setupSocket, initializeProducer, initializeConsumer, kafkaConsumerService;
 
 try {
+  console.log("📦 Loading application modules...");
   app = require("./app.js");
+  console.log("✅ app.js loaded");
+  
   setupSocket = require("./sockets/index.js").setupSocket;
+  console.log("✅ sockets/index.js loaded");
+  
   initializeProducer = require("./config/kafka").initializeProducer;
   initializeConsumer = require("./config/kafka").initializeConsumer;
+  console.log("✅ kafka config loaded");
+  
   kafkaConsumerService = require("./services/kafkaConsumer");
+  console.log("✅ kafkaConsumer service loaded");
+  
   require("dotenv").config();
+  console.log("✅ dotenv configured");
   
   // Initialize Cloudinary
   require("./config/cloudinary");
+  console.log("✅ cloudinary config loaded");
+  
+  console.log("✅ All modules loaded successfully");
 } catch (requireError) {
+  console.error("=".repeat(50));
   console.error("❌ ERROR: Failed to load required modules!");
-  console.error("Error:", requireError.message);
-  console.error("Stack:", requireError.stack);
+  console.error("=".repeat(50));
+  console.error("Error message:", requireError.message);
+  console.error("Error name:", requireError.name);
+  console.error("Error code:", requireError.code);
+  console.error("");
+  console.error("Stack trace:");
+  console.error(requireError.stack);
   console.error("");
   console.error("This usually means:");
   console.error("1. node_modules is missing - run 'npm install --production'");
   console.error("2. A dependency is missing from package.json");
   console.error("3. There's a syntax error in the code");
-  process.exit(1);
+  console.error("4. Environment variables are missing (check Azure App Settings)");
+  console.error("=".repeat(50));
+  // Give time for logs to flush before exiting
+  setTimeout(() => process.exit(1), 2000);
 }
 
 // For iisnode, PORT is automatically set by Azure/IIS via environment variable
@@ -49,7 +114,9 @@ console.log("=".repeat(50));
 console.log(`📋 PORT: ${PORT}`);
 console.log(`📋 NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
 console.log(`📋 Working Directory: ${process.cwd()}`);
+console.log(`📋 __dirname: ${__dirname}`);
 console.log(`📋 Node.js Version: ${process.version}`);
+console.log(`📋 Process PID: ${process.pid}`);
 console.log("=".repeat(50));
 
 const server = http.createServer(app);
@@ -110,12 +177,20 @@ process.on('SIGINT', async () => {
   console.log("\n🛑 Shutting down gracefully...");
   
   try {
-    // Stop Kafka consumer
-    await kafkaConsumerService.stopConsuming();
+    // Stop Kafka consumer if available
+    if (kafkaConsumerService && typeof kafkaConsumerService.stopConsuming === 'function') {
+      await kafkaConsumerService.stopConsuming();
+    }
     
-    // Flush any remaining messages
-    const messageService = require("./services/messageService");
-    await messageService.flushBuffer();
+    // Flush any remaining messages if available
+    try {
+      const messageService = require("./services/messageService");
+      if (messageService && typeof messageService.flushBuffer === 'function') {
+        await messageService.flushBuffer();
+      }
+    } catch (msgError) {
+      console.warn("⚠️ Could not flush messages:", msgError.message);
+    }
     
     console.log("✅ Graceful shutdown completed");
     process.exit(0);
