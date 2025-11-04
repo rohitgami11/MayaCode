@@ -150,9 +150,19 @@ jobs:
             exit 1;
           fi
           
+          # Verify package-lock.json exists (required for npm install on Azure)
+          if [ -f "package-lock.json" ]; then
+            echo "✅ package-lock.json found (required for deterministic npm install)";
+          else
+            echo "⚠️ WARNING: package-lock.json not found! This may cause dependency installation issues.";
+          fi
+          
           echo ""
           echo "📦 Package size:"
           du -sh .
+          echo ""
+          echo "📋 Final deployment structure (top level files):"
+          ls -la | head -20
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -177,13 +187,30 @@ jobs:
       
       - name: Configure App Service for build
         run: |
-          # Set app setting to enable build during deployment (Oryx will install node_modules)
+          # Set app settings for Windows App Service with iisnode
           az webapp config appsettings set \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+              WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
             --output none
-          echo "✅ Configured SCM_DO_BUILD_DURING_DEPLOYMENT=true"
+          echo "✅ Configured build settings"
+          
+          # Verify Node.js version is set
+          NODE_VERSION=$(az webapp config appsettings list \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?name=='WEBSITE_NODE_DEFAULT_VERSION'].value" -o tsv)
+          echo "Node.js version: ${NODE_VERSION:-'default'}"
+          
+          # For Windows App Service, ensure startup command is not set (iisnode uses web.config)
+          az webapp config set \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --startup-file "" \
+            --output none
+          echo "✅ Cleared startup command (using web.config instead)"
       
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3
@@ -192,4 +219,25 @@ jobs:
           app-name: 'Maya'
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
+      
+      - name: Verify deployment and check logs
+        run: |
+          echo "⏳ Waiting 10 seconds for deployment to process..."
+          sleep 10
+          
+          echo "📋 Checking deployment status..."
+          # Get deployment status
+          az webapp deployment list \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[0].{status:status,message:message,active:active}" \
+            --output table || echo "Could not retrieve deployment status"
+          
+          echo ""
+          echo "💡 Next steps if deployment fails:"
+          echo "1. Check Azure Portal → App Service → Log stream for startup errors"
+          echo "2. Verify environment variables are set in Configuration → Application Settings"
+          echo "3. Check Kudu console at: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          echo "4. Verify node_modules exists: cd D:\\home\\site\\wwwroot && dir node_modules"
+          echo "5. Check iisnode logs at: D:\\home\\LogFiles\\iisnode"
           
