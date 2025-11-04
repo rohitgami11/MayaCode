@@ -79,17 +79,79 @@ jobs:
         with:
           name: node-app
       
-      - name: Debug - Check artifact structure
+      - name: Debug - Check and flatten artifact structure
         run: |
-          echo "Current directory contents after download:"
+          echo "📥 Current directory contents after download:"
           ls -la
-          if [ -f "package.json" ]; then 
-            echo "✅ package.json found"; 
-          else 
-            echo "❌ package.json not found!"; 
-            exit 1; 
+          echo ""
+          
+          # Find package.json - it might be in root, node-app/, or node-app/Backend/
+          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f | head -1)
+          
+          if [ -z "$PACKAGE_JSON_PATH" ]; then
+            echo "❌ ERROR: package.json not found anywhere!";
+            echo "Directory structure:"
+            find . -type d | head -20
+            exit 1;
           fi
-          echo "Package size:"
+          
+          echo "✅ Found package.json at: $PACKAGE_JSON_PATH"
+          
+          # If package.json is not at root, flatten the structure
+          if [ "$PACKAGE_JSON_PATH" != "./package.json" ]; then
+            PACKAGE_DIR=$(dirname "$PACKAGE_JSON_PATH")
+            echo "🔄 Flattening structure: moving contents from $PACKAGE_DIR to root..."
+            
+            # Normalize path
+            PACKAGE_DIR="${PACKAGE_DIR#./}"
+            
+            # Move all contents from package.json directory to root
+            shopt -s dotglob nullglob
+            for item in "$PACKAGE_DIR"/* "$PACKAGE_DIR"/.[!.]* "$PACKAGE_DIR"/..?*; do
+              if [ -e "$item" ] || [ -L "$item" ]; then
+                mv "$item" . 2>/dev/null || true
+              fi
+            done
+            shopt -u dotglob nullglob
+            
+            # Remove empty directories
+            for i in {1..5}; do
+              find . -type d -empty -delete 2>/dev/null || true
+            done
+            
+            echo "✅ Flattening complete"
+          fi
+          
+          # Verify required files are at root
+          echo ""
+          echo "📋 Verifying deployment structure:"
+          if [ -f "package.json" ]; then
+            echo "✅ package.json found at root";
+          else
+            echo "❌ package.json not at root!";
+            exit 1;
+          fi
+          
+          if [ -f "src/index.js" ]; then
+            echo "✅ src/index.js found (entry point)";
+          else
+            echo "❌ src/index.js not found!";
+            echo "Searching for index.js:"
+            find . -name "index.js" -type f
+            exit 1;
+          fi
+          
+          if [ -f "web.config" ]; then
+            echo "✅ web.config found (required for iisnode)";
+            echo "Verifying web.config points to src/index.js:"
+            grep -q "src/index.js" web.config && echo "✅ web.config correctly configured for src/index.js" || echo "⚠️ WARNING: web.config may not be configured correctly"
+          else
+            echo "❌ web.config not found! This is required for Windows App Service.";
+            exit 1;
+          fi
+          
+          echo ""
+          echo "📦 Package size:"
           du -sh .
       
       - name: Login to Azure
