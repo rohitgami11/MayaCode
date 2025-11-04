@@ -1,13 +1,40 @@
-// IMMEDIATE STARTUP LOGGING - Write to stderr immediately to ensure iisnode captures it
-// Use process.stderr.write for immediate output that iisnode can capture
-process.stderr.write("=".repeat(50) + "\n");
-process.stderr.write("🚀 MayaCode Backend - Starting...\n");
-process.stderr.write("=".repeat(50) + "\n");
-process.stderr.write(`📋 Node.js Version: ${process.version}\n`);
-process.stderr.write(`📋 Process PID: ${process.pid}\n`);
-process.stderr.write(`📋 Working Directory: ${process.cwd()}\n`);
-process.stderr.write(`📋 __dirname: ${__dirname}\n`);
-process.stderr.write("=".repeat(50) + "\n");
+// CRITICAL: Wrap entire file execution to catch ANY errors
+// This ensures we can log errors even if something fails before error handlers are set up
+(function() {
+  try {
+    // IMMEDIATE STARTUP LOGGING - Write to stderr immediately to ensure iisnode captures it
+    // Use process.stderr.write for immediate output that iisnode can capture
+    process.stderr.write("==================================================\n");
+    process.stderr.write("🚀 MayaCode Backend - Starting...\n");
+    process.stderr.write("==================================================\n");
+    process.stderr.write("📋 Node.js Version: " + process.version + "\n");
+    process.stderr.write("📋 Process PID: " + process.pid + "\n");
+    process.stderr.write("📋 Working Directory: " + process.cwd() + "\n");
+    process.stderr.write("📋 __dirname: " + __dirname + "\n");
+    process.stderr.write("==================================================\n");
+    
+    // Also write to console
+    console.log("==================================================");
+    console.log("🚀 MayaCode Backend - Starting...");
+    console.log("==================================================");
+    console.log("📋 Node.js Version:", process.version);
+    console.log("📋 Process PID:", process.pid);
+    console.log("📋 Working Directory:", process.cwd());
+    console.log("📋 __dirname:", __dirname);
+    console.log("==================================================");
+  } catch (e) {
+    // Last resort - try to write error to a file or use basic console
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const errorLogPath = path.join(__dirname, "../startup-error.log");
+      fs.writeFileSync(errorLogPath, "Failed to write startup logs: " + e.toString() + "\n" + e.stack);
+    } catch (fileError) {
+      // If even file writing fails, we're in deep trouble
+      // This should never happen, but it's a safety net
+    }
+  }
+})();
 
 // Add error handling for missing dependencies
 // Check if node_modules exists (warn but don't exit - actual requires will fail if missing)
@@ -142,7 +169,20 @@ try {
 
 // For iisnode, PORT is automatically set by Azure/IIS via environment variable
 // Use default 8000 only for local development (should never happen in Azure)
-const PORT = process.env.PORT || process.env.IISNODE_HTTP_PORT || 8000;
+let PORT = process.env.PORT || process.env.IISNODE_HTTP_PORT || 8000;
+
+// Validate PORT is a number
+PORT = parseInt(PORT, 10);
+if (isNaN(PORT) || PORT <= 0 || PORT > 65535) {
+  process.stderr.write("❌ ERROR: Invalid PORT value: " + (process.env.PORT || process.env.IISNODE_HTTP_PORT || "8000") + "\n");
+  process.stderr.write("PORT must be a number between 1 and 65535\n");
+  console.error("❌ ERROR: Invalid PORT value:", process.env.PORT || process.env.IISNODE_HTTP_PORT || "8000");
+  console.error("PORT must be a number between 1 and 65535");
+  process.exit(1);
+}
+
+process.stderr.write("📋 Using PORT: " + PORT + "\n");
+console.log("📋 Using PORT:", PORT);
 
 // Log startup information for debugging
 // Use both stderr and console for maximum visibility
