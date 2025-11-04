@@ -1,8 +1,25 @@
+// CRITICAL: Check Node.js version FIRST (before any ES6+ syntax)
+var nodeVersion = process.version;
+var majorVersion = parseInt(nodeVersion.split('.')[0].substring(1), 10);
+
+if (majorVersion < 4) {
+  console.error("==========================================");
+  console.error("❌ FATAL ERROR: Node.js version too old!");
+  console.error("Current version: " + nodeVersion);
+  console.error("Required version: Node.js 18+ or 20+");
+  console.error("");
+  console.error("This application requires modern Node.js features.");
+  console.error("Please set WEBSITE_NODE_DEFAULT_VERSION=20.11.1");
+  console.error("And ensure Stack Settings use Node.js 20.x");
+  console.error("==========================================");
+  process.exit(1);
+}
+
 // Add error handling for missing dependencies
 try {
   // Check if node_modules exists
-  const fs = require("fs");
-  const path = require("path");
+  var fs = require("fs");
+  var path = require("path");
   if (!fs.existsSync(path.join(__dirname, "../../node_modules"))) {
     console.error("❌ ERROR: node_modules directory not found!");
     console.error("Please run 'npm install --production' in the deployment directory");
@@ -13,8 +30,9 @@ try {
   console.error("❌ Error checking for node_modules:", checkError.message);
 }
 
-const http = require("http");
-let app, setupSocket, initializeProducer, initializeConsumer, kafkaConsumerService;
+// Now safe to use ES6+ syntax since we verified Node.js version
+var http = require("http");
+var app, setupSocket, initializeProducer, initializeConsumer, kafkaConsumerService;
 
 try {
   app = require("./app.js");

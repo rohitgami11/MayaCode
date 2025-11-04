@@ -188,21 +188,23 @@ jobs:
       - name: Configure App Service for build
         run: |
           # Set app settings for Windows App Service with iisnode
+          echo "Configuring Azure App Service..."
+          
+          # Set Node.js version (critical for Windows App Service)
           az webapp config appsettings set \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
             --settings \
               SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-              WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
+              WEBSITE_NODE_DEFAULT_VERSION=~20 \
             --output none
-          echo "✅ Configured build settings"
           
-          # Verify Node.js version is set
-          NODE_VERSION=$(az webapp config appsettings list \
+          # Also set via stack configuration (more reliable)
+          az webapp config set \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
-            --query "[?name=='WEBSITE_NODE_DEFAULT_VERSION'].value" -o tsv)
-          echo "Node.js version: ${NODE_VERSION:-'default'}"
+            --linux-fx-version "" \
+            --output none
           
           # For Windows App Service, ensure startup command is not set (iisnode uses web.config)
           az webapp config set \
@@ -210,7 +212,19 @@ jobs:
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
             --startup-file "" \
             --output none
-          echo "✅ Cleared startup command (using web.config instead)"
+          
+          echo "✅ Configured build settings"
+          
+          # Verify Node.js version is set
+          NODE_VERSION=$(az webapp config appsettings list \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?name=='WEBSITE_NODE_DEFAULT_VERSION'].value" -o tsv)
+          echo "Node.js version setting: ${NODE_VERSION:-'not set (using default)'}"
+          echo ""
+          echo "⚠️ IMPORTANT: If Node.js version is old, check Azure Portal:"
+          echo "   Configuration → General settings → Stack settings"
+          echo "   Should show: Node.js 20.x"
       
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3
