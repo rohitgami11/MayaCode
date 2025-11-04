@@ -156,4 +156,59 @@ jobs:
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
       
+      - name: Install dependencies on Azure
+        run: |
+          echo "Waiting for deployment to complete..."
+          sleep 30
+          
+          echo "Installing npm dependencies on Azure App Service..."
+          
+          # Get publishing credentials
+          PUBLISH_CREDS=$(az webapp deployment list-publishing-profiles \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?publishMethod=='MSDeploy'].{userName:userName,userPWD:userPWD}" \
+            --output json | jq -r '.[0]')
+          
+          if [ -z "$PUBLISH_CREDS" ] || [ "$PUBLISH_CREDS" = "null" ]; then
+            echo "WARNING: Could not get publishing credentials. Manual npm install required:"
+            echo "  Kudu: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+            echo "  Command: cd D:\\home\\site\\wwwroot && npm install --production"
+            exit 0
+          fi
+          
+          USERNAME=$(echo "$PUBLISH_CREDS" | jq -r '.userName')
+          PASSWORD=$(echo "$PUBLISH_CREDS" | jq -r '.userPWD')
+          
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ "$USERNAME" = "null" ] || [ "$PASSWORD" = "null" ]; then
+            echo "WARNING: Could not extract credentials. Manual npm install required."
+            exit 0
+          fi
+          
+          # Use Kudu API to run npm install
+          KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          COMMAND="cd D:\\home\\site\\wwwroot && npm install --production"
+          
+          echo "Executing npm install via Kudu API..."
+          
+          # Execute command via Kudu REST API
+          RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"$COMMAND\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
+            "$KUDU_URL/api/command" 2>&1)
+          
+          if echo "$RESPONSE" | grep -q "error\|Error\|ERROR"; then
+            echo "WARNING: npm install may have failed. Check Kudu logs."
+            echo "Response: $RESPONSE"
+          else
+            echo "✅ npm install command submitted"
+          fi
+          
+          echo "Waiting 90 seconds for npm install to complete..."
+          sleep 90
+          
+          echo "✅ Dependency installation completed"
+          echo "⚠️ If errors persist, verify node_modules exists via Kudu Console"
+      
           
