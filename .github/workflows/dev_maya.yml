@@ -46,14 +46,21 @@ jobs:
       - name: Prepare deployment package
         working-directory: ./Backend
         run: |
-          # Clean up unnecessary files
-          rm -rf logs .git node_modules
-          find . -name "*.log" -type f -delete
-          find . -name ".DS_Store" -type f -delete
+          # Clean up unnecessary files (ignore errors if files don't exist)
+          rm -rf logs .git node_modules || true
+          find . -name "*.log" -type f -delete 2>/dev/null || true
+          find . -name ".DS_Store" -type f -delete 2>/dev/null || true
           
-          # Ensure package.json and package-lock.json exist for Azure to install dependencies
-          [ ! -f "package.json" ] && (echo "ERROR: package.json missing"; exit 1)
-          [ ! -f "package-lock.json" ] && (echo "ERROR: package-lock.json missing"; exit 1)
+          # Ensure package.json exists (required)
+          if [ ! -f "package.json" ]; then
+            echo "ERROR: package.json missing"
+            exit 1
+          fi
+          
+          # Warn if package-lock.json is missing (recommended but not required)
+          if [ ! -f "package-lock.json" ]; then
+            echo "WARNING: package-lock.json missing - Azure will generate it, but this may cause dependency issues"
+          fi
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
