@@ -76,14 +76,21 @@ jobs:
       
       - name: Flatten artifact structure
         run: |
-          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f | head -1)
-          if [ -z "$PACKAGE_JSON_PATH" ]; then
+          # Find package.json (handle broken pipe gracefully)
+          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f 2>/dev/null | head -1) || PACKAGE_JSON_PATH=""
+          
+          if [ -z "$PACKAGE_JSON_PATH" ] || [ ! -f "$PACKAGE_JSON_PATH" ]; then
             echo "ERROR: package.json not found"
+            echo "Current directory contents:"
+            ls -la
             exit 1
           fi
+          
+          # If package.json is not at root, flatten the structure
           if [ "$PACKAGE_JSON_PATH" != "./package.json" ]; then
             PACKAGE_DIR=$(dirname "$PACKAGE_JSON_PATH")
             PACKAGE_DIR="${PACKAGE_DIR#./}"
+            echo "Flattening from: $PACKAGE_DIR"
             shopt -s dotglob nullglob
             for item in "$PACKAGE_DIR"/* "$PACKAGE_DIR"/.[!.]* "$PACKAGE_DIR"/..?*; do
               [ -e "$item" ] && mv "$item" . 2>/dev/null || true
@@ -91,9 +98,11 @@ jobs:
             shopt -u dotglob nullglob
             find . -type d -empty -delete 2>/dev/null || true
           fi
-          [ ! -f "package.json" ] && exit 1
-          [ ! -f "src/index.js" ] && exit 1
-          [ ! -f "web.config" ] && exit 1
+          
+          # Verify required files exist
+          if [ ! -f "package.json" ]; then echo "ERROR: package.json missing"; exit 1; fi
+          if [ ! -f "src/index.js" ]; then echo "ERROR: src/index.js missing"; exit 1; fi
+          if [ ! -f "web.config" ]; then echo "ERROR: web.config missing"; exit 1; fi
       
       - name: Login to Azure
         uses: azure/login@v2
