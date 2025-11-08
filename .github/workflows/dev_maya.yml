@@ -302,29 +302,34 @@ jobs:
           echo "Waiting for files to be extracted..."
           sleep 10
           
-          # Trigger SCM build explicitly (ZIP deploy doesn't auto-trigger build)
+          # Trigger npm install explicitly
           echo ""
-          echo "🔨 Triggering SCM build to run npm install..."
-          echo "   ZIP deploy doesn't auto-trigger SCM build, so we trigger it manually"
+          echo "🔨 Running npm install explicitly..."
+          echo "   ZIP deploy doesn't auto-trigger build, so we run npm install manually"
           
-          # Trigger build via Kudu build API
-          echo "Triggering build via Kudu build API..."
-          BUILD_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+          # Use Kudu command API to run npm install
+          echo "Running npm install via Kudu command API..."
+          EXEC_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -u "$USERNAME:$PASSWORD" \
             -X POST \
-            "$KUDU_URL/api/build" \
+            "$KUDU_URL/api/command" \
             -H "Content-Type: application/json" \
-            -d "{}" 2>&1)
+            -d "{\"command\": \"npm install --production\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" 2>&1)
           
-          echo "Build API response: $BUILD_RESPONSE"
+          HTTP_CODE=$(echo "$EXEC_RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+          RESPONSE_BODY=$(echo "$EXEC_RESPONSE" | sed '/HTTP_CODE:/d')
           
-          # Also try to run the deployment script directly as a backup
-          echo "Also running deployment script directly..."
-          SCRIPT_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"command\": \"cd D:\\\\home\\\\site\\\\wwwroot && if (Test-Path .deploy.cmd) { cmd /c .deploy.cmd } else { npm install --production }\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" 2>&1)
+          echo "HTTP Status: ${HTTP_CODE:-unknown}"
+          echo "Response: $RESPONSE_BODY"
           
-          echo "Script execution response: $SCRIPT_RESPONSE"
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
+            echo "✅ npm install command submitted successfully"
+          else
+            echo "⚠️ Command API returned error, but continuing to poll for node_modules..."
+            echo "   The command might still be running in the background"
+          fi
+          
+          # Give it a moment to start
+          sleep 5
           
           # Wait for npm install to complete
           echo ""
