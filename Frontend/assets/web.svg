@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="200" height="200" fill="#E34F26"/>
-  <path d="M100 50L150 75V125L100 150L50 125V75L100 50Z" fill="#F7DF1E"/>
-  <path d="M100 50L150 75V125L100 150L50 125V75L100 50Z" fill="#1572B6" fill-opacity="0.5"/>
-  <path d="M100 50L150 75V125L100 150L50 125V75L100 50Z" fill="#E34F26" fill-opacity="0.5"/>
-</svg> 

@@ -76,7 +76,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!selectedType || !title.trim() || !content.trim() || !user?.phone) {
+    if (!selectedType || !title.trim() || !content.trim() || !user?.email) {
       Toast.show({
         type: 'info',
         text1: 'Missing Information',
@@ -98,7 +98,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     setIsLoading(true);
     try {
       const newPost = await postService.createPost(
-        user.phone,
+        user.email,
         selectedType,
         title.trim(),
         content.trim(),

@@ -1,30 +1,46 @@
 import { createPost, Post, updatePost } from '@/models/Post';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = `${process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000'}/api`;
 
 // Post Operations
 export const postService = {
   // Create a new post
   async createPost(
-    phone: string,
+    email: string,
     type: Post['type'],
     title: string,
     content: string,
     data: Partial<Post> = {}
   ): Promise<Post | null> {
+    // Sanitize data for logging (truncate long base64 strings)
+    const logData = { ...data };
+    if (logData.images && Array.isArray(logData.images)) {
+      logData.images = logData.images.map((img: string) => 
+        img ? (img.substring(0, 50) + '... (base64 image data)') : 'null'
+      );
+    }
+    
     console.log('Starting createPost with:', {
-      phone,
+      email,
       type,
       title,
       content,
-      data,
+      data: logData,
       apiUrl: API_URL
     });
 
     try {
       console.log('Creating post object...');
-      const post = createPost(phone, type, title, content, data);
-      console.log('Created post object:', post);
+      const post = createPost(email, type, title, content, data);
+      
+      // Sanitize post for logging
+      const logPost = { ...post };
+      if (logPost.images && Array.isArray(logPost.images)) {
+        logPost.images = logPost.images.map((img: string) => 
+          img ? (img.substring(0, 50) + '... (base64 image data)') : 'null'
+        );
+      }
+      console.log('Created post object:', logPost);
 
       console.log('Making API request to:', `${API_URL}/posts`);
       const response = await fetch(`${API_URL}/posts`, {
@@ -76,12 +92,12 @@ export const postService = {
     }
   },
 
-  // Get posts by phone
-  async getUserPosts(phone: string): Promise<Post[]> {
+  // Get posts by email
+  async getUserPosts(email: string): Promise<Post[]> {
     try {
       console.log('postService API_URL:', API_URL);
-      console.log('Starting getUserPosts with:', { phone });
-      const response = await fetch(`${API_URL}/posts/phone/${phone}`);
+      console.log('Starting getUserPosts with:', { email });
+      const response = await fetch(`${API_URL}/posts/email/${email}`);
       if (!response.ok) throw new Error('Failed to fetch user posts');
       return response.json();
     } catch (error) {

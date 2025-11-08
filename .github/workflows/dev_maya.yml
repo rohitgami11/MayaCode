@@ -1,0 +1,382 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy Node.js app to Azure Web App - Maya
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: Backend/package-lock.json
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: Backend/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('Backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        working-directory: ./Backend
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build and test
+        working-directory: ./Backend
+        run: |
+          npm run build --if-present
+          npm run test --if-present
+      
+      - name: Prepare deployment package
+        working-directory: ./Backend
+        run: |
+          # Clean up unnecessary files (ignore errors if files don't exist)
+          rm -rf logs .git node_modules || true
+          find . -name "*.log" -type f -delete 2>/dev/null || true
+          find . -name ".DS_Store" -type f -delete 2>/dev/null || true
+          
+          # Ensure package.json exists (required)
+          if [ ! -f "package.json" ]; then
+            echo "ERROR: package.json missing"
+            exit 1
+          fi
+          
+          # CRITICAL: Ensure package-lock.json exists (required for Azure npm install)
+          if [ ! -f "package-lock.json" ]; then
+            echo "❌ ERROR: package-lock.json missing - Azure needs this to install dependencies"
+            echo "Generating package-lock.json..."
+            npm install --package-lock-only --no-save || {
+              echo "Failed to generate package-lock.json"
+              exit 1
+            }
+          fi
+          
+          # Verify .deployment file exists
+          if [ ! -f ".deployment" ]; then
+            echo "⚠️ WARNING: .deployment file missing - creating it..."
+            echo "[config]" > .deployment
+            echo "SCM_DO_BUILD_DURING_DEPLOYMENT=true" >> .deployment
+          fi
+          
+          # Verify .deploy.cmd exists (deployment script for npm install)
+          if [ ! -f ".deploy.cmd" ]; then
+            echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
+            printf '@if "%%SCM_NODE_PATH%%"=="" (\n  call :ExecuteCmd "npm install --production" \n) else (\n  call :ExecuteCmd "%%SCM_NODE_PATH%%\\npm.cmd" install --production\n)\ngoto :EOF\n\n:ExecuteCmd\nsetlocal\nset _CMD_=%%*\ncall %%_CMD_%%\nif "%%ERRORLEVEL%%" neq "0" (\n  echo Failed to execute '\''%%_CMD_%%'\''\n  exit /b %%ERRORLEVEL%%\n)\nendlocal\ngoto :EOF\n' > .deploy.cmd
+          fi
+          
+          echo "✅ Deployment package prepared:"
+          echo "   - package.json: ✓"
+          echo "   - package-lock.json: ✓"
+          echo "   - .deployment: ✓"
+          echo "   - .deploy.cmd: ✓"
+          echo "   - web.config: ✓"
+      
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-app
+          path: ./Backend
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: node-app
+          path: .
+      
+      - name: Flatten artifact structure (Backend subdirectory to root)
+        run: |
+          echo "Current directory structure:"
+          ls -la
+          echo ""
+          
+          # Check if Backend directory exists (artifact was uploaded from Backend/)
+          if [ -d "Backend" ]; then
+            echo "📦 Found Backend subdirectory - flattening to root..."
+            echo "Contents of Backend directory:"
+            ls -la Backend/
+            echo ""
+            
+            # Move all contents from Backend/ to root
+            shopt -s dotglob nullglob
+            for item in Backend/* Backend/.[!.]* Backend/..?*; do
+              if [ -e "$item" ]; then
+                echo "Moving: $item -> $(basename "$item")"
+                mv "$item" . 2>/dev/null || true
+              fi
+            done
+            shopt -u dotglob nullglob
+            
+            # Remove empty Backend directory
+            rmdir Backend 2>/dev/null || true
+            echo "✅ Flattened structure"
+          else
+            echo "ℹ️ No Backend subdirectory found - assuming already at root"
+          fi
+          
+          echo ""
+          echo "Final directory structure:"
+          ls -la
+          echo ""
+          
+          # Verify required files exist at root (matching sampleBackend structure)
+          if [ ! -f "package.json" ]; then 
+            echo "❌ ERROR: package.json missing at root"
+            exit 1
+          fi
+          if [ ! -f "package-lock.json" ]; then 
+            echo "❌ ERROR: package-lock.json missing at root (CRITICAL for npm install)"
+            exit 1
+          fi
+          if [ ! -f "src/index.js" ]; then 
+            echo "❌ ERROR: src/index.js missing"
+            exit 1
+          fi
+          if [ ! -f "web.config" ]; then 
+            echo "❌ ERROR: web.config missing"
+            exit 1
+          fi
+          if [ ! -f ".deployment" ]; then 
+            echo "⚠️ WARNING: .deployment file missing - creating it..."
+            echo "[config]" > .deployment
+            echo "SCM_DO_BUILD_DURING_DEPLOYMENT=true" >> .deployment
+          fi
+          
+          if [ ! -f ".deploy.cmd" ]; then 
+            echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
+            printf '@if "%%SCM_NODE_PATH%%"=="" (\n  call :ExecuteCmd "npm install --production" \n) else (\n  call :ExecuteCmd "%%SCM_NODE_PATH%%\\npm.cmd" install --production\n)\ngoto :EOF\n\n:ExecuteCmd\nsetlocal\nset _CMD_=%%*\ncall %%_CMD_%%\nif "%%ERRORLEVEL%%" neq "0" (\n  echo Failed to execute '\''%%_CMD_%%'\''\n  exit /b %%ERRORLEVEL%%\n)\nendlocal\ngoto :EOF\n' > .deploy.cmd
+          fi
+          
+          # Verify .deployment content
+          if [ -f ".deployment" ]; then
+            echo "📄 .deployment file content:"
+            cat .deployment
+            echo ""
+          fi
+          
+          echo "✅ All required files verified at root level"
+          echo "   - package.json: ✓"
+          echo "   - package-lock.json: ✓"
+          echo "   - src/index.js: ✓"
+          echo "   - web.config: ✓"
+          echo "   - .deployment: ✓"
+          echo "   - .deploy.cmd: ✓"
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_97B8DA4EDB1F4771AECAA074696E3E74 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A991E240EF384A70891F3517360891DE }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2276E1689CF5423891BDA354FAC31928 }}
+      
+      - name: Get App Service resource group
+        id: get-rg
+        run: |
+          RESOURCE_GROUP=$(az webapp list --query "[?name=='Maya'].resourceGroup" -o tsv | head -1)
+          if [ -z "$RESOURCE_GROUP" ]; then
+            RESOURCE_GROUP=$(az resource list --name Maya --resource-type "Microsoft.Web/sites" --query "[0].resourceGroup" -o tsv)
+          fi
+          if [ -z "$RESOURCE_GROUP" ]; then
+            echo "Error: Could not determine resource group for app 'Maya'"
+            exit 1
+          fi
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
+          echo "Resource Group: $RESOURCE_GROUP"
+      
+      - name: Configure App Service
+        run: |
+          # Set app settings for Windows App Service with iisnode
+          echo "Configuring Azure App Service..."
+          
+          # Set Node.js version (critical for Windows App Service)
+          az webapp config appsettings set \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+              WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
+              SCM_COMMAND_IDLE_TIMEOUT=600 \
+            --output none
+          
+          # Also set via stack configuration (more reliable)
+          az webapp config set \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --linux-fx-version "" \
+            --output none
+          
+          # For Windows App Service, ensure startup command is not set (iisnode uses web.config)
+          az webapp config set \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --startup-file "" \
+            --output none
+          
+          echo "✅ Configured build settings"
+          
+          # Verify Node.js version is set
+          NODE_VERSION=$(az webapp config appsettings list \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?name=='WEBSITE_NODE_DEFAULT_VERSION'].value" -o tsv)
+          echo "Node.js version setting: ${NODE_VERSION:-'not set (using default)'}"
+          echo ""
+          echo "⚠️ IMPORTANT: If Node.js version is old, check Azure Portal:"
+          echo "   Configuration → General settings → Stack settings"
+          echo "   Should show: Node.js 20.x"
+      
+      - name: Create deployment ZIP package
+        run: |
+          echo "📦 Creating deployment ZIP package..."
+          # Create ZIP excluding git and other unnecessary files
+          zip -r deploy.zip . -x "*.git*" "*.DS_Store*" || {
+            # Fallback if zip command fails
+            echo "Using alternative ZIP method..."
+            find . -type f ! -path "*/\.*" -exec zip deploy.zip {} +
+          }
+          echo "✅ ZIP package created"
+          ls -lh deploy.zip
+      
+      - name: Deploy via Kudu ZIP API (triggers build automatically)
+        run: |
+          echo "🚀 Deploying via Kudu ZIP API..."
+          echo "   This method triggers SCM build automatically (like sampleBackend)"
+          echo "   With SCM_DO_BUILD_DURING_DEPLOYMENT=true, npm install will run automatically"
+          
+          # Get publishing credentials
+          PUBLISH_CREDS=$(az webapp deployment list-publishing-profiles \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?publishMethod=='MSDeploy'].{userName:userName,userPWD:userPWD}" \
+            --output json | jq -r '.[0]')
+          
+          if [ -z "$PUBLISH_CREDS" ] || [ "$PUBLISH_CREDS" = "null" ]; then
+            echo "❌ ERROR: Could not get publishing credentials"
+            exit 1
+          fi
+          
+          USERNAME=$(echo "$PUBLISH_CREDS" | jq -r '.userName')
+          PASSWORD=$(echo "$PUBLISH_CREDS" | jq -r '.userPWD')
+          
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ "$USERNAME" = "null" ] || [ "$PASSWORD" = "null" ]; then
+            echo "❌ ERROR: Could not extract credentials"
+            exit 1
+          fi
+          
+          KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          
+          # Deploy via Kudu ZIP API (synchronous to ensure files are deployed)
+          echo "Uploading ZIP package..."
+          DEPLOY_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            "$KUDU_URL/api/zipdeploy" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@deploy.zip" 2>&1)
+          
+          echo "Deployment response: $DEPLOY_RESPONSE"
+          
+          # Wait a moment for files to be extracted
+          echo "Waiting for files to be extracted..."
+          sleep 10
+          
+          # Trigger npm install explicitly
+          echo ""
+          echo "🔨 Running npm install explicitly..."
+          echo "   ZIP deploy doesn't auto-trigger build, so we run npm install manually"
+          
+          # Use Kudu command API to run npm install
+          echo "Running npm install via Kudu command API..."
+          EXEC_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            "$KUDU_URL/api/command" \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"npm install --production\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" 2>&1)
+          
+          HTTP_CODE=$(echo "$EXEC_RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+          RESPONSE_BODY=$(echo "$EXEC_RESPONSE" | sed '/HTTP_CODE:/d')
+          
+          echo "HTTP Status: ${HTTP_CODE:-unknown}"
+          echo "Response: $RESPONSE_BODY"
+          
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
+            echo "✅ npm install command submitted successfully"
+          else
+            echo "⚠️ Command API returned error, but continuing to poll for node_modules..."
+            echo "   The command might still be running in the background"
+          fi
+          
+          # Give it a moment to start
+          sleep 5
+          
+          # Wait for npm install to complete
+          echo ""
+          echo "⏳ Waiting for npm install to complete..."
+          echo "   This takes ~10-15 minutes (matching sampleBackend)"
+          echo "   Checking every 30 seconds for node_modules..."
+          
+          # Poll for node_modules directory (up to 20 minutes)
+          for i in {1..40}; do
+            sleep 30
+            echo "   Checking... ($((i * 30))s elapsed)"
+            
+            # Check if node_modules exists
+            CHECK_RESULT=$(curl -s -u "$USERNAME:$PASSWORD" \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -d "{\"command\": \"if (Test-Path 'D:\\\\home\\\\site\\\\wwwroot\\\\node_modules') { Write-Output 'EXISTS' } else { Write-Output 'MISSING' }\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
+              "$KUDU_URL/api/command" 2>/dev/null | jq -r '.Output' 2>/dev/null || echo "MISSING")
+            
+            if echo "$CHECK_RESULT" | grep -q "EXISTS"; then
+              echo "✅ node_modules found! npm install completed."
+              break
+            fi
+          done
+          
+          # Final verification
+          FINAL_CHECK=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"if (Test-Path 'D:\\\\home\\\\site\\\\wwwroot\\\\node_modules') { Write-Output 'EXISTS' } else { Write-Output 'MISSING' }\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
+            "$KUDU_URL/api/command" 2>/dev/null | jq -r '.Output' 2>/dev/null || echo "MISSING")
+          
+          if echo "$FINAL_CHECK" | grep -q "EXISTS"; then
+            echo ""
+            echo "✅ Deployment complete! Dependencies installed successfully."
+            echo "   Total time: ~15-20 minutes (matching sampleBackend)"
+          else
+            echo ""
+            echo "⚠️ WARNING: node_modules may not exist after 20 minutes."
+            echo "   Check deployment logs in Azure Portal:"
+            echo "   https://portal.azure.com -> App Service -> Deployment Center -> Logs"
+            echo ""
+            echo "   Or check via Kudu: $KUDU_URL"
+            echo "   Navigate to: D:\\home\\site\\wwwroot"
+            echo ""
+            echo "   Manual fix: Run 'npm install --production' via Kudu Console"
+            exit 1
+          fi
+      
+          

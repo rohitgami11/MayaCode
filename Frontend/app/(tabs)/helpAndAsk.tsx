@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import Toast from 'react-native-toast-message';
 import { postService } from '@/services/postService';
 import { PostType, Post } from '@/models/Post';
+import { convertImageToBase64 } from '@/services/imageService';
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -25,6 +26,8 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
   const [postType, setPostType] = useState<PostType>('Ask for Help');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isPostDetailVisible, setIsPostDetailVisible] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleImagePick = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -62,7 +65,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim() || !user?.phone) {
+    if (!title.trim() || !content.trim() || !user?.email) {
       Alert.alert(
         'Missing Information',
         'Please provide title, content, and ensure you are logged in.',
@@ -82,13 +85,28 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
 
     setIsLoading(true);
     try {
+      // Convert local image to base64 if present
+      let images: string[] | undefined = undefined;
+      if (imageUri) {
+        const base64Image = await convertImageToBase64(imageUri);
+        if (base64Image) {
+          images = [base64Image];
+          console.log('Converted image to base64 successfully - backend will compress');
+        } else {
+          console.error('Failed to convert image to base64');
+          Alert.alert('Error', 'Failed to process image. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const newPost = await postService.createPost(
-        user.phone,
+        user.email,
         postType,
         title.trim(),
         content.trim(),
         {
-          images: imageUri ? [imageUri] : undefined,
+          images: images,
           location: {
             latitude: selectedLocation.latitude,
             longitude: selectedLocation.longitude
@@ -322,17 +340,50 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
                 <Text style={styles.postDetailType}>Type: {selectedPost.type}</Text>
                 <Text style={styles.postDetailContent}>{selectedPost.content}</Text>
                 {selectedPost.images && selectedPost.images.length > 0 && selectedPost.images[0] && (
-                  <Image 
-                    source={{ uri: selectedPost.images[0] }} 
-                    style={styles.postDetailImage}
-                  />
+                  <View style={styles.imageContainer}>
+                    {/* Empty frame background - shows while image loads */}
+                    {!imageLoaded && !imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <ActivityIndicator size="large" color="#007BFF" />
+                        <Text style={styles.placeholderText}>Loading image...</Text>
+                      </View>
+                    )}
+                    {/* Error state - only show if image fails to load */}
+                    {imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <Ionicons name="image-outline" size={48} color="#ccc" />
+                        <Text style={styles.placeholderText}>Image unavailable</Text>
+                      </View>
+                    )}
+                    {/* Image will fade in when loaded */}
+                    <Image 
+                      source={{ uri: selectedPost.images[0] }} 
+                      style={[styles.postDetailImage, (!imageLoaded || imageError) && { opacity: 0 }]}
+                      resizeMode="cover"
+                      onLoadStart={() => {
+                        console.log('Starting to load image:', selectedPost?.images?.[0] ? 'Image exists' : 'No image');
+                        setImageLoaded(false);
+                        setImageError(false);
+                      }}
+                      onLoadEnd={() => {
+                        console.log('Image loaded successfully');
+                        setImageLoaded(true);
+                        setImageError(false);
+                      }}
+                      onError={(error) => {
+                        console.error('Error loading image:', error.nativeEvent.error);
+                        setImageError(true);
+                        setImageLoaded(false);
+                      }}
+                    />
+                  </View>
                 )}
                 {selectedPost.location && (
                   <Text style={styles.postDetailLocation}>
                     Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
                   </Text>
                 )}
-                {selectedPost.phone ? <Text style={styles.postDetailAuthor}>By: {selectedPost.phone}</Text> : null}
+                {selectedPost.email ? <Text style={styles.postDetailAuthor}>By: {selectedPost.email}</Text> : null}
                 <Text style={styles.postDetailDate}>
                   Created: {new Date(selectedPost.createdAt).toLocaleDateString()}
                 </Text>
@@ -348,11 +399,16 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }: CreatePostModalPro
 };
 
 export default function HelpAndAsk() {
+  const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isPostDetailVisible, setIsPostDetailVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'ask' | 'offer'>('all');
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
 
   const openModal = () => setIsModalVisible(true);
   const closeModal = () => setIsModalVisible(false);
@@ -360,6 +416,59 @@ export default function HelpAndAsk() {
   const handlePostCreated = () => {
     fetchPosts();
     closeModal();
+  };
+
+  const handleEditPost = () => {
+    setIsEditModalVisible(true);
+  };
+
+  const handleDeletePost = async () => {
+    if (!selectedPost) return;
+
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const success = await postService.deletePost(selectedPost._id!.toString());
+              if (success) {
+                Toast.show({
+                  type: 'success',
+                  text1: 'Post Deleted',
+                  text2: 'Your post has been deleted successfully.',
+                });
+                setIsPostDetailVisible(false);
+                fetchPosts();
+              } else {
+                Toast.show({
+                  type: 'error',
+                  text1: 'Delete Failed',
+                  text2: 'Could not delete the post. Please try again.',
+                });
+              }
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Delete Failed',
+                text2: 'An error occurred while deleting the post.',
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePostUpdated = () => {
+    fetchPosts();
+    setIsEditModalVisible(false);
+    setIsPostDetailVisible(false);
   };
 
   const fetchPosts = async () => {
@@ -379,8 +488,12 @@ export default function HelpAndAsk() {
   // Function to handle marker press
   const handleMarkerPress = (post: Post) => {
     console.log('Marker pressed for post:', post.title); // Debug log
+    console.log('Post images:', post.images?.length || 0, 'image(s)'); // Debug log
     setSelectedPost(post);
     setIsPostDetailVisible(true);
+    setImageLoaded(false);
+    setImageError(false);
+    setImageLoading(false);
   };
 
   useEffect(() => {
@@ -391,11 +504,23 @@ export default function HelpAndAsk() {
     <View style={styles.container}>
       <Text style={styles.title}>Help & Ask</Text>
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => setActiveFilter('ask')}>
-          <Text style={styles.buttonText}>Needs help</Text>
+        <TouchableOpacity 
+          style={[styles.button, activeFilter === 'all' && styles.activeButton]} 
+          onPress={() => setActiveFilter('all')}
+        >
+          <Text style={[styles.buttonText, activeFilter === 'all' && styles.activeButtonText]}>All</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={() => setActiveFilter('offer')}>
-          <Text style={styles.buttonText}>Gives help</Text>
+        <TouchableOpacity 
+          style={[styles.button, activeFilter === 'ask' && styles.activeButton]} 
+          onPress={() => setActiveFilter('ask')}
+        >
+          <Text style={[styles.buttonText, activeFilter === 'ask' && styles.activeButtonText]}>Needs help</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.button, activeFilter === 'offer' && styles.activeButton]} 
+          onPress={() => setActiveFilter('offer')}
+        >
+          <Text style={[styles.buttonText, activeFilter === 'offer' && styles.activeButtonText]}>Gives help</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.mapContainer}>
@@ -477,20 +602,67 @@ export default function HelpAndAsk() {
                 <Text style={styles.postDetailType}>Type: {selectedPost.type}</Text>
                 <Text style={styles.postDetailContent}>{selectedPost.content}</Text>
                 {selectedPost.images && selectedPost.images.length > 0 && selectedPost.images[0] && (
-                  <Image 
-                    source={{ uri: selectedPost.images[0] }} 
-                    style={styles.postDetailImage}
-                  />
+                  <View style={styles.imageContainer}>
+                    {/* Empty frame background - shows while image loads */}
+                    {!imageLoaded && !imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <ActivityIndicator size="large" color="#007BFF" />
+                        <Text style={styles.placeholderText}>Loading image...</Text>
+                      </View>
+                    )}
+                    {/* Error state - only show if image fails to load */}
+                    {imageError && (
+                      <View style={styles.imagePlaceholder}>
+                        <Ionicons name="image-outline" size={48} color="#ccc" />
+                        <Text style={styles.placeholderText}>Image unavailable</Text>
+                      </View>
+                    )}
+                    {/* Image will fade in when loaded */}
+                    <Image 
+                      source={{ uri: selectedPost.images[0] }} 
+                      style={[styles.postDetailImage, (!imageLoaded || imageError) && { opacity: 0 }]}
+                      resizeMode="cover"
+                      onLoadStart={() => {
+                        console.log('Starting to load image:', selectedPost?.images?.[0] ? 'Image exists' : 'No image');
+                        setImageLoaded(false);
+                        setImageError(false);
+                      }}
+                      onLoadEnd={() => {
+                        console.log('Image loaded successfully');
+                        setImageLoaded(true);
+                        setImageError(false);
+                      }}
+                      onError={(error) => {
+                        console.error('Error loading image:', error.nativeEvent.error);
+                        setImageError(true);
+                        setImageLoaded(false);
+                      }}
+                    />
+                  </View>
                 )}
                 {selectedPost.location && (
                   <Text style={styles.postDetailLocation}>
                     Location: {selectedPost.location.latitude.toFixed(4)}, {selectedPost.location.longitude.toFixed(4)}
                   </Text>
                 )}
-                {selectedPost.phone ? <Text style={styles.postDetailAuthor}>By: {selectedPost.phone}</Text> : null}
+                {selectedPost.email ? <Text style={styles.postDetailAuthor}>By: {selectedPost.email}</Text> : null}
                 <Text style={styles.postDetailDate}>
                   Created: {new Date(selectedPost.createdAt).toLocaleDateString()}
                 </Text>
+                
+                {/* Edit/Delete buttons for post owner - positioned at bottom right */}
+                {user?.email === selectedPost.email && (
+                  <View style={styles.postActionsContainer}>
+                    <TouchableOpacity style={styles.actionButton} onPress={handleEditPost}>
+                      <Ionicons name="create-outline" size={20} color="#007BFF" />
+                      <Text style={styles.actionButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} onPress={handleDeletePost}>
+                      <Ionicons name="trash-outline" size={20} color="#DC3545" />
+                      <Text style={styles.actionButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </ScrollView>
             ) : (
               <ActivityIndicator size="large" color="#007AFF" />
@@ -498,6 +670,13 @@ export default function HelpAndAsk() {
           </View>
         </View>
       </Modal>
+
+      {/* Edit Post Modal */}
+      <CreatePostModal
+        visible={isEditModalVisible}
+        onClose={() => setIsEditModalVisible(false)}
+        onPostCreated={handlePostUpdated}
+      />
     </View>
   );
 }
@@ -530,7 +709,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   button: {
-    width: 120,
+    width: 100,
     padding: 10,
     borderRadius: 25,
     alignItems: 'center',
@@ -546,11 +725,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
+  activeButton: {
+    backgroundColor: '#B71C1C',
+    borderColor: '#B71C1C',
+  },
   buttonText: {
     fontSize: 14,
     fontWeight: '500',
     color: '#B71C1C',
     textAlign: 'center',
+  },
+  activeButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
   fabButton: {
     position: 'absolute',
@@ -772,13 +959,6 @@ const styles = StyleSheet.create({
   selectedTypeButtonText: {
     color: '#fff',
   },
-  actionButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
   postDetailModalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -794,7 +974,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   postDetailScrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 10,
   },
   postDetailTitle: {
     fontSize: 20,
@@ -819,6 +999,27 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 10,
     marginBottom: 15,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 15,
+    position: 'relative',
+    backgroundColor: '#f5f5f5',
+  },
+  imagePlaceholder: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  placeholderText: {
+    marginTop: 8,
+    color: '#999',
+    fontSize: 14,
   },
   postDetailLocation: {
     fontSize: 14,
@@ -882,6 +1083,23 @@ const styles = StyleSheet.create({
   },  
   askHelpMarker: {
     backgroundColor: '#2196F3', // Blue for ask help
+  },
+  postActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    marginBottom: 0,
+    paddingHorizontal: 10,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 15,
+  },
+  actionButtonText: {
+    marginLeft: 5,
+    fontSize: 14,
+    color: '#007BFF',
   },
 
 });

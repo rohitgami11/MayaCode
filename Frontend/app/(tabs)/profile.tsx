@@ -38,7 +38,7 @@ export default function ProfileScreen() {
     
     try {
       const newProfile = await userService.updateUserProfile({
-        name: user.name || user.phone,
+        name: user.name || user.email,
         userType: 'Other',
         languages: [],
         createdStories: [],
@@ -67,9 +67,9 @@ export default function ProfileScreen() {
       if (user) {
         setIsLoadingProfile(true);
         try {
-          // Check if phone number exists in Appwrite session
-          if (!user.phone) {
-            console.log('No phone number found in Appwrite session');
+          // Check if email exists in user session
+          if (!user.email) {
+            console.log('No email found in user session');
             router.replace('/login');
             return;
           }
@@ -109,6 +109,15 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
   if (isLoading || isLoadingProfile) {
     return (
       <View style={styles.loadingContainer}>
@@ -131,9 +140,11 @@ export default function ProfileScreen() {
           <Ionicons name="arrow-back" size={24} color="#000" />
           <Text style={styles.headerTitle}>Back</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setIsEditModalVisible(true)}>
-          <Ionicons name="pencil-outline" size={24} color="#000" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => setIsEditModalVisible(true)} style={styles.headerButton}>
+            <Ionicons name="pencil-outline" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollViewContent}>
@@ -145,7 +156,7 @@ export default function ProfileScreen() {
                <Ionicons name="person" size={80} color="#fff" />
              )}
           </View>
-          <Text style={styles.userName}>{userProfile?.name || user.phone}</Text>
+          <Text style={styles.userName}>{userProfile?.name || user.email}</Text>
         </View>
 
         <View style={styles.tabsContainer}>
@@ -260,6 +271,12 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+
       </ScrollView>
 
       <EditProfileModal
@@ -308,6 +325,33 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginLeft: 5,
     color: '#000',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    marginLeft: 15,
+    padding: 5,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFEBEE',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    marginTop: 2,
+    marginHorizontal: 20,
+  },
+  logoutButtonText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   scrollViewContent: {
     padding: 20,
@@ -366,26 +410,26 @@ const styles = StyleSheet.create({
   },
   aboutSection: {
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   statsSection: {
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   historySection: {
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 8,
     color: '#2C3E50',
   },
   detailsCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -393,7 +437,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   detailsRow: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   detailItem: {
     flex: 1,

@@ -1,82 +1,151 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import React from 'react';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SocketProvider, useSocket } from '../../context/SocketContext';
 
-// Sample data for chat contacts
-const sampleContacts = [
-  { id: 'contact1', name: 'Volunteer for Food Delivery' },
-  { id: 'contact2', name: 'Person Asking for Math Help' },
-  { id: 'contact3', name: 'Offering Help with Gardening' },
-  { id: 'contact4', name: 'Admin - Regarding Your Post' },
-];
+// Message bubble component for each message
+const MessageBubble = ({ text }: { text: string }) => (
+  <View style={[styles.messageContainer, styles.otherMessage]}>
+    <Text style={styles.messageText}>{text}</Text>
+  </View>
+);
 
 const Chat = () => {
-  const router = useRouter();
+  const { sendMessage, messages } = useSocket();
+  const [messageInput, setMessageInput] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleContactPress = (contactId: string, contactName: string) => {
-    // Navigate to a new screen for individual chat
-    // We will create individual-chat.tsx next
-    router.push({ pathname: '/individual-chat', params: { chatId: contactId, name: contactName } });
+  const handleSendMessage = () => {
+    if (messageInput.trim()) {
+      sendMessage(messageInput);
+      setMessageInput('');
+    }
   };
 
+  useEffect(() => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages]);
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.header}>Chats</Text>
-        <ScrollView style={styles.contactsList}>
-          {sampleContacts.map((contact) => (
-            <TouchableOpacity
-              key={contact.id}
-              style={styles.contactItem}
-              onPress={() => handleContactPress(contact.id, contact.name)}
-            >
-              <Text style={styles.contactName}>{contact.name}</Text>
-              {/* Add a placeholder for last message or time if needed */}
-            </TouchableOpacity>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 25}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerTitle}>Chat</Text>
+        </View>
+        <ScrollView
+          style={styles.messagesList}
+          contentContainerStyle={styles.messagesContent}
+          ref={scrollViewRef}
+          keyboardShouldPersistTaps="handled"
+        >
+          {messages.map((msg, idx) => (
+            <MessageBubble key={idx} text={msg} />
           ))}
         </ScrollView>
-      </View>
-    </SafeAreaView>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Type a message"
+            value={messageInput}
+            onChangeText={setMessageInput}
+            onSubmitEditing={handleSendMessage}
+            returnKeyType="send"
+          />
+          <TouchableOpacity onPress={handleSendMessage} style={styles.sendButton}>
+            <Ionicons name="send" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FDFDE3', // Match app background
-  },
   container: {
     flex: 1,
     padding: 10,
+    backgroundColor: '#FDFDE3',
+    paddingBottom: 70,
   },
-  header: {
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginBottom: 20,
+  },
+  backButton: {
+    marginRight: 10,
+    padding: 5,
+  },
+  headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    textAlign: 'left',
-    marginBottom: 20,
     color: '#2C3E50',
-  },
-  contactsList: {
     flex: 1,
   },
-  contactItem: {
-    backgroundColor: '#fff',
-    padding: 15,
+  messagesList: {
+    flex: 1,
+    padding: 0,
+  },
+  messagesContent: {
+    paddingBottom: 100,
+  },
+  messageContainer: {
+    padding: 10,
     borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    marginBottom: 5,
+    maxWidth: '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOpacity: 0.1,
+    shadowRadius: 1.5,
+    elevation: 2,
   },
-  contactName: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  myMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#DCF8C6',
+  },
+  otherMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+  },
+  messageText: {
+    fontSize: 16,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
+  },
+  sendButton: {
+    backgroundColor: '#075E54',
+    borderRadius: 20,
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
-export default Chat;
+export default Chat; 

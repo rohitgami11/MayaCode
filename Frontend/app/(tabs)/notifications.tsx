@@ -1,17 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
-
-// Sample data for notifications
-const sampleNotifications = [
-  { id: '1', message: 'You have a new message from John Doe.', timestamp: '2023-10-27T10:00:00Z' },
-  { id: '2', message: 'Your help offer for gardening has been accepted.', timestamp: '2023-10-27T09:30:00Z' },
-  { id: '3', message: 'New help request posted near your location.', timestamp: '2023-10-27T08:00:00Z' },
-  { id: '4', message: 'Reminder: Community cleanup tomorrow.', timestamp: '2023-10-26T18:00:00Z' },
-];
+import { useSocket } from '../../context/SocketContext';
 
 const NotificationsPage = () => {
-  // In a real app, you would fetch notifications from an API
-  const notifications = sampleNotifications;
+  const { notifications, clearNotifications } = useSocket();
+
+  useEffect(() => {
+    // clearNotifications(); // Clear notifications on mount (commented for debugging)
+  }, [clearNotifications]);
 
   const renderNotificationItem = ({ item }: { item: any }) => (
     <View style={styles.notificationItem}>
@@ -26,8 +22,9 @@ const NotificationsPage = () => {
       <FlatList
         data={notifications}
         renderItem={renderNotificationItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(_, idx) => idx.toString()}
         contentContainerStyle={styles.listContent}
+        ListEmptyComponent={<Text style={{textAlign:'center',marginTop:40,color:'#888'}}>No notifications yet.</Text>}
       />
     </View>
   );

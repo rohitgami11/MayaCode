@@ -1,30 +1,26 @@
 import { useRouter } from 'expo-router';
-import React, { createContext, ReactNode, useContext, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useState, useEffect } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Account, Client, ID } from 'react-native-appwrite';
 import Toast from 'react-native-toast-message';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Appwrite Configuration
-const client = new Client()
-    .setEndpoint('https://cloud.appwrite.io/v1')
-    .setProject(process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID)
-
-export const account = new Account(client);
+// Backend API Configuration
+const API_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL || 'http://localhost:8000';
+const API_URL = API_BASE_URL; // Use base URL directly for auth routes
 
 // Define types
 export interface User {
-  $id: string; // Appwrite user ID
-  $createdAt: string; // Add createdAt
-  $updatedAt: string; // Add updatedAt
-  name: string; // Assuming name is stored in Appwrite user document
-  phone: string; // Assuming phone is stored in Appwrite user document
-  email?: string; // Email might be null for phone users
-  photoURL?: string; // Assuming photoURL is stored if needed (will be in custom profile)
-  // Add other Appwrite user properties based on account.get() output
-  status: boolean;
-  phoneVerification: boolean;
-  emailVerification: boolean;
-  prefs: { [key: string]: any };
+  id: string;
+  email: string;
+  name: string;
+  userType?: string;
+  age?: number;
+  location?: string;
+  languages?: string[];
+  profileImage?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface AuthContextType {
@@ -33,10 +29,10 @@ interface AuthContextType {
   isSendingOtp: boolean;
   isVerifyingOtp: boolean;
   isAuthenticated: boolean;
-  sessionId: string | null;
+  token: string | null;
   checkAuthStatus: () => Promise<void>;
-  sendOtp: (phone: string) => Promise<string | null>;
-  verifyOtp: (userId: string, otp: string) => Promise<boolean>;
+  sendOtp: (email: string) => Promise<boolean>;
+  verifyOtp: (email: string, otp: string) => Promise<boolean>;
   signOut: () => Promise<void>;
 }
 
@@ -49,136 +45,175 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Track initial auth check
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const router = useRouter();
 
-  // Helper to sanitize phone number to +[country code][number]
-  const sanitizePhone = (phone: string): string => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      return '+91' + digits;
-    }
-    if (digits.length > 10 && digits.startsWith('91')) {
-      return '+' + digits;
-    }
-    return phone;
-  };
-
   const checkAuthStatus = async (): Promise<void> => {
-    setIsLoading(true);
+    setIsCheckingAuth(true);
     try {
       console.log('Checking auth status...');
-      const appwriteUser = await account.get();
-      console.log('Appwrite user:', appwriteUser);
+      const storedToken = await AsyncStorage.getItem('authToken');
       
-      if (appwriteUser) {
-        setUser({
-          $id: appwriteUser.$id,
-          $createdAt: appwriteUser.$createdAt,
-          $updatedAt: appwriteUser.$updatedAt,
-          name: appwriteUser.name || 'User',
-          phone: appwriteUser.phone || '',
-          email: appwriteUser.email || undefined,
-          status: appwriteUser.status,
-          phoneVerification: appwriteUser.phoneVerification,
-          emailVerification: appwriteUser.emailVerification,
-          prefs: appwriteUser.prefs || {},
+      if (storedToken) {
+        // Verify token with backend
+        const response = await axios.get(`${API_URL}/auth/verify-token`, {
+          headers: { Authorization: `Bearer ${storedToken}` }
         });
-        setIsAuthenticated(true);
         
-        const sessions = await account.listSessions();
-        const currentSession = sessions.sessions.find(session => session.current);
-        if (currentSession) {
-          setSessionId(currentSession.$id);
+        if (response.data.user) {
+          setUser(response.data.user);
+          setToken(storedToken);
+          setIsAuthenticated(true);
+        } else {
+          await AsyncStorage.removeItem('authToken');
+          setUser(null);
+          setToken(null);
+          setIsAuthenticated(false);
         }
       } else {
         setUser(null);
+        setToken(null);
         setIsAuthenticated(false);
-        setSessionId(null);
       }
     } catch (error: any) {
-      console.error("Error checking session:", error);
+      console.error("Error checking auth status:", error);
+      await AsyncStorage.removeItem('authToken');
       setUser(null);
+      setToken(null);
       setIsAuthenticated(false);
-      setSessionId(null);
     } finally {
-      setIsLoading(false);
+      setIsCheckingAuth(false);
     }
   };
 
-  const sendOtp = async (phone: string): Promise<string | null> => {
+  const sendOtp = async (email: string): Promise<boolean> => {
     setIsSendingOtp(true);
     try {
-      const sanitizedPhone = sanitizePhone(phone);
-      console.log('Sending OTP to:', sanitizedPhone);
-
-      const token = await account.createPhoneToken(
-        ID.unique(),
-        sanitizedPhone
-      );
-      console.log('Phone token created:', token);
+      console.log('Sending OTP to:', email);
+      console.log('Using API URL:', API_BASE_URL);
+      console.log('Full request URL:', `${API_URL}/auth/request-otp`);
       
-      Toast.show({
-        type: 'success',
-        text1: 'OTP Sent',
-        text2: 'Please enter the OTP sent to your phone.',
-      });
+      // Skip health check for now - go directly to OTP request
+      console.log('Attempting OTP request...');
 
-      return token.userId;
+      const response = await axios.post(`${API_URL}/auth/request-otp`, {
+        email: email
+      }, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.data.success) {
+        if (response.data.fallback) {
+          // Development fallback - show OTP in console and toast
+          console.log('🔑 OTP for development:', response.data.otp);
+          Toast.show({
+            type: 'info',
+            text1: 'OTP Generated',
+            text2: `Development mode: OTP is ${response.data.otp}`,
+          });
+        } else {
+          Toast.show({
+            type: 'success',
+            text1: 'OTP Sent',
+            text2: 'Please enter the OTP sent to your email.',
+          });
+        }
+        return true;
+      }
+      return false;
     } catch (error: any) {
       console.error("Error sending OTP:", error);
+      console.error("Full error details:", {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
+      
+      let errorMessage = 'Please check your email and try again.';
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please check your internet connection and try again.';
+      } else if (error.message === 'Network Error') {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       Toast.show({
         type: 'error',
         text1: 'Failed to send OTP',
-        text2: error.message || 'Please check your number and try again.',
+        text2: errorMessage,
       });
-      return null;
+      return false;
     } finally {
       setIsSendingOtp(false);
     }
   };
 
-  const verifyOtp = async (userId: string, otp: string): Promise<boolean> => {
+  const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
     setIsVerifyingOtp(true);
     try {
-      console.log(`Verifying OTP for userId: ${userId}`);
+      console.log(`Verifying OTP for email: ${email}`);
       
-      // Delete all existing sessions
-      try {
-        const sessions = await account.listSessions();
-        for (const session of sessions.sessions) {
-          await account.deleteSession(session.$id);
+      const response = await axios.post(`${API_URL}/auth/verify-otp`, {
+        email: email,
+        otp: otp
+      }, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
-        console.log('Deleted existing sessions');
-      } catch (error) {
-        console.log('Error deleting sessions:', error);
-      }
-      
-      // Create new session with the OTP
-      await account.createSession(userId, otp);
-      console.log('Session created successfully');
-
-      // Update auth status
-      await checkAuthStatus();
-
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: 'Logged in successfully',
       });
+      
+      if (response.data.success && response.data.token && response.data.user) {
+        // Store token and user data
+        await AsyncStorage.setItem('authToken', response.data.token);
+        setToken(response.data.token);
+        setUser(response.data.user);
+        setIsAuthenticated(true);
 
-      router.replace('/(tabs)');
-      return true;
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: 'Logged in successfully',
+        });
+
+        router.replace('/(tabs)');
+        return true;
+      }
+      return false;
     } catch (error: any) {
       console.error("Error verifying OTP:", error);
+      console.error("Full error details:", {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
       Toast.show({
         type: 'error',
         text1: 'Invalid OTP',
-        text2: error.message || 'Please check the OTP and try again.',
+        text2: error.response?.data?.message || error.message || 'Please check the OTP and try again.',
       });
       return false;
     } finally {
@@ -189,10 +224,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      await account.deleteSession("current");
+      await AsyncStorage.removeItem('authToken');
       setUser(null);
+      setToken(null);
       setIsAuthenticated(false);
-      setSessionId(null);
 
       Toast.show({
         type: 'success',
@@ -219,15 +254,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isSendingOtp,
     isVerifyingOtp,
     isAuthenticated,
-    sessionId,
+    token,
     checkAuthStatus,
     sendOtp,
     verifyOtp,
     signOut
   };
 
-  // Only show loading screen when explicitly loading auth status
-  if (isLoading && isSendingOtp === false && isVerifyingOtp === false) {
+  // Check auth status on component mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  // Only show loading screen during initial auth check
+  if (isCheckingAuth) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#e8f5e9' }}>
         <ActivityIndicator size="large" color="#3b82f6" />

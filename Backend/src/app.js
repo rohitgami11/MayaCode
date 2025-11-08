@@ -1,0 +1,119 @@
+const express = require("express");
+const session = require("express-session");
+const cors = require("cors");
+const passport = require("passport");
+
+const connectDB = require("./config/db.js");
+const { errorHandler } = require("./middleware/errorMiddleware.js");
+require("./config/passport.js"); // Load passport config
+
+const postRoutes = require("./routes/postRoutes.js");
+const userRoutes = require("./routes/userRoutes.js");
+const authRoutes = require("./routes/authRoutes.js");
+const messageRoutes = require("./routes/messageRoutes.js");
+const imageRoutes = require("./routes/imageRoutes.js");
+
+require("dotenv").config()
+
+// Set environment variables if not already set
+process.env.JWT_SECRET_VERIFY = process.env.JWT_SECRET_VERIFY;
+
+// SMTP credentials should be set via environment variables
+if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  console.warn('⚠️ SMTP credentials not set. Email functionality will not work.');
+  console.warn('Please set SMTP_USER and SMTP_PASS environment variables.');
+}
+
+// Attempt to connect to database (non-blocking, won't crash app)
+connectDB().catch(err => {
+  console.error('Database connection failed:', err.message);
+});
+
+const app = express();
+const path = require('path');
+
+// Trust proxy for Azure App Service (critical for correct IP/URL handling)
+app.set('trust proxy', true);
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' })); // Increase JSON body limit for base64 images
+app.use(express.urlencoded({ limit: '50mb', extended: false })); // Increase URL encoded limit
+
+// Serve static files from public directory with optimized headers
+app.use('/public', express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      // Set aggressive caching for images
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('ETag', require('crypto').createHash('md5').update(filePath).digest('hex'));
+    }
+  },
+  maxAge: '1y' // Browser cache for 1 year
+}));
+
+app.use((req, res, next) => {
+  next();
+});
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "secret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  const mongoose = require('mongoose');
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  
+  res.json({ 
+    message: "MayaCode Backend is running!", 
+    status: "healthy",
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      auth: "/auth",
+      posts: "/api/posts", 
+      users: "/api/users",
+      messages: "/api/messages",
+      images: "/api/images"
+    },
+    environment: {
+      mongodb_configured: !!process.env.MONGODB_URI,
+      node_env: process.env.NODE_ENV || 'not set'
+    }
+  });
+});
+
+// Test endpoint to verify backend is receiving requests
+app.post("/api/test", (req, res) => {
+  console.log("🧪 TEST ENDPOINT HIT!");
+  console.log("Request body:", req.body);
+  res.json({ message: "Test endpoint working!", received: req.body });
+});
+
+// API routes
+app.use("/api/posts", postRoutes);
+app.use("/api/users", userRoutes);
+app.use("/auth", authRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/images", imageRoutes);
+
+// 404 handler for undefined routes (must be before error handler)
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    error: `Cannot ${req.method} ${req.originalUrl}`
+  });
+});
+
+// Error middleware (must be last, after all routes)
+app.use(errorHandler);
+
+module.exports = app;

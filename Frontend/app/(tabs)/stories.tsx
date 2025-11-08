@@ -38,14 +38,14 @@ const Stories = () => {
   }, []);
 
   const fetchMyStories = useCallback(async () => {
-    if (!user?.phone) {
+    if (!user?.email) {
       console.log('No phone number found in user session:', user);
       setMyStories([]);
       return;
     }
     setIsLoading(true);
     try {
-      const userPosts = await postService.getUserPosts(user.phone);
+      const userPosts = await postService.getUserPosts(user.email);
       // Filter for only 'Story' type posts
       const userStoryPosts = userPosts.filter(post => post.type === 'Story');
       setMyStories(userStoryPosts);
@@ -59,19 +59,19 @@ const Stories = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.phone]);
+  }, [user?.email]);
 
   useFocusEffect(
     useCallback(() => {
       fetchAllStories();
-      if (user?.phone) {
+      if (user?.email) {
         fetchMyStories();
       }
-    }, [fetchAllStories, fetchMyStories, user?.phone])
+    }, [fetchAllStories, fetchMyStories, user?.email])
   );
 
   useEffect(() => {
-    if (activeTab === 'my' && !user?.phone) {
+    if (activeTab === 'my' && !user?.email) {
       // If user switches to 'My Stories' but is not logged in, switch back to 'All Stories'
       setActiveTab('all');
       Toast.show({
@@ -80,7 +80,7 @@ const Stories = () => {
         text2: 'Please sign in to view your stories.',
       });
     }
-  }, [activeTab, user?.phone]);
+  }, [activeTab, user?.email]);
 
   const storiesToShow = activeTab === 'my' ? myStories : allStories;
 
@@ -102,7 +102,7 @@ const Stories = () => {
         });
         // Refetch stories after deletion
         fetchAllStories();
-        if (user?.phone) {
+        if (user?.email) {
           fetchMyStories();
         }
       } else {
@@ -136,20 +136,25 @@ const Stories = () => {
   }, [router]);
 
   const handleWriteStory = () => {
-    if (!user?.phone) {
-      console.log('No phone number found in user session:', user);
+    if (!user?.email) {
+      console.log('No email found in user session:', user);
       Toast.show({
         type: 'error',
         text1: 'Authentication Required',
-        text2: 'Please sign in to write a story.',
+        text2: 'Please sign in to write a story. Redirecting to login...',
         position: 'top',
-        visibilityTime: 4000,
+        visibilityTime: 2000,
         autoHide: true,
         topOffset: 50,
         onPress: () => {
-          console.log('Toast pressed');
+          console.log('Toast pressed, redirecting to login');
+          router.push('/login');
         },
       });
+      // Redirect to login page after a short delay
+      setTimeout(() => {
+        router.push('/login');
+      }, 500);
       return;
     }
     router.push('/create-story');

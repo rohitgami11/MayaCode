@@ -31,7 +31,7 @@ A full-stack mobile platform connecting refugees and helpers for community-drive
 - **Interactive Post System:** Create and manage help requests, offers, and community stories dynamically.
 - **Live Statistics Dashboard:** Track contributions, engagements, and user activity analytics.
 - **Multi-Language Support (Planned):** Support for localized experiences based on user preferences.
-- **Secure OTP Authentication:** Phone-based login with JWT session management via Appwrite.
+- **Secure OTP Authentication:** Email-based login with JWT session management.
 - **Image Upload & Management:** Enable image attachments to profiles and posts for enriched interaction.
 
 ---
@@ -41,7 +41,7 @@ A full-stack mobile platform connecting refugees and helpers for community-drive
 - **Frontend:** React Native, Expo, TypeScript  
 - **Backend:** Node.js, Express.js  
 - **Database:** MongoDB  
-- **Authentication:** Appwrite  
+- **Authentication:** Email OTP with JWT  
 - **Maps & Location:** Google Maps API  
 - **Deployment:** Render (Backend), Expo EAS (Frontend)  
 
@@ -54,7 +54,7 @@ A full-stack mobile platform connecting refugees and helpers for community-drive
 - Node.js and npm  
 - Expo CLI (install with `npm install -g expo-cli`)  
 - A running MongoDB instance (local or cloud)  
-- Appwrite instance (for OTP authentication)  
+- SMTP email service (for OTP delivery)  
 - Google Maps API Key  
 
 ### Steps
@@ -93,12 +93,14 @@ A full-stack mobile platform connecting refugees and helpers for community-drive
 
 | Method | Endpoint                                 | Description                        |
 |--------|------------------------------------------|------------------------------------|
-| POST   | `/api/users/phone/:phone`                | Create or update user profile      |
-| GET    | `/api/users/phone/:phone`                | Retrieve user profile              |
-| PUT    | `/api/users/phone/:phone`                | Update user profile                |
-| DELETE | `/api/users/phone/:phone`                | Delete user profile                |
-| POST   | `/api/users/phone/:phone/posts`          | Add a new post (help/offer/story)  |
-| PUT    | `/api/users/phone/:phone/stats`          | Update user statistics             |
+| POST   | `/api/users/email/:email`                | Create or update user profile      |
+| GET    | `/api/users/email/:email`                | Retrieve user profile              |
+| PUT    | `/api/users/email/:email`                | Update user profile                |
+| DELETE | `/api/users/email/:email`                | Delete user profile                |
+| POST   | `/api/users/email/:email/posts`          | Add a new post (help/offer/story)  |
+| PUT    | `/api/users/email/:email/stats`          | Update user statistics             |
+| GET    | `/api/users/profile`                    | Get current user profile (JWT)     |
+| PUT    | `/api/users/profile`                    | Update current user profile (JWT)  |
 
 > ℹ️ For full API documentation, refer to the backend code in `/MayaCodeBackend/routes/`.
 

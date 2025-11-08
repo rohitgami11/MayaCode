@@ -44,8 +44,8 @@ const CreateStoryScreen = () => {
   };
 
   const handleCreateAndPublish = async () => {
-    if (!user?.phone) {
-      console.log('No phone number found in user session:', user);
+    if (!user?.email) {
+      console.log('No email found in user session:', user);
       Toast.show({
         type: 'error',
         text1: 'Authentication Error',
@@ -73,7 +73,7 @@ const CreateStoryScreen = () => {
 
     setIsLoading(true);
     console.log('Creating story with data:', {
-      phone: user.phone,
+      email: user.email,
       type: 'Story',
       title: title.trim(),
       content: description.trim(),
@@ -82,7 +82,7 @@ const CreateStoryScreen = () => {
 
     try {
       const newStory = await postService.createPost(
-        user.phone,
+        user.email,
         'Story',
         title.trim(),
         description.trim(),

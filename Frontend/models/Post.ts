@@ -9,7 +9,7 @@ export interface Location {
 
 export interface Post {
   _id?: ObjectId;
-  phone: string;
+  email: string;
   type: PostType;
   title: string;
   content: string;
@@ -26,7 +26,7 @@ export interface Post {
 
 // Helper function to create a new post
 export const createPost = (
-  phone: string,
+  email: string,
   type: PostType,
   title: string,
   content: string,
@@ -34,7 +34,7 @@ export const createPost = (
 ): Post => {
   const now = new Date();
   return {
-    phone,
+    email,
     type,
     title,
     content,
