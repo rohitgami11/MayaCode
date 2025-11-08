@@ -74,10 +74,35 @@ jobs:
             echo "SCM_DO_BUILD_DURING_DEPLOYMENT=true" >> .deployment
           fi
           
+          # Verify .deploy.cmd exists (deployment script for npm install)
+          if [ ! -f ".deploy.cmd" ]; then
+            echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
+            cat > .deploy.cmd << 'EOF'
+@if "%SCM_NODE_PATH"=="" (
+  call :ExecuteCmd "npm install --production" 
+) else (
+  call :ExecuteCmd "%SCM_NODE_PATH%\npm.cmd" install --production
+)
+goto :EOF
+
+:ExecuteCmd
+setlocal
+set _CMD_=%*
+call %_CMD_%
+if "%ERRORLEVEL%" neq "0" (
+  echo Failed to execute '%_CMD_%'
+  exit /b %ERRORLEVEL%
+)
+endlocal
+goto :EOF
+EOF
+          fi
+          
           echo "✅ Deployment package prepared:"
           echo "   - package.json: ✓"
           echo "   - package-lock.json: ✓"
           echo "   - .deployment: ✓"
+          echo "   - .deploy.cmd: ✓"
           echo "   - web.config: ✓"
       
       - name: Upload artifact for deployment job
@@ -158,6 +183,29 @@ jobs:
             echo "SCM_DO_BUILD_DURING_DEPLOYMENT=true" >> .deployment
           fi
           
+          if [ ! -f ".deploy.cmd" ]; then 
+            echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
+            cat > .deploy.cmd << 'EOF'
+@if "%SCM_NODE_PATH"=="" (
+  call :ExecuteCmd "npm install --production" 
+) else (
+  call :ExecuteCmd "%SCM_NODE_PATH%\npm.cmd" install --production
+)
+goto :EOF
+
+:ExecuteCmd
+setlocal
+set _CMD_=%*
+call %_CMD_%
+if "%ERRORLEVEL%" neq "0" (
+  echo Failed to execute '%_CMD_%'
+  exit /b %ERRORLEVEL%
+)
+endlocal
+goto :EOF
+EOF
+          fi
+          
           # Verify .deployment content
           if [ -f ".deployment" ]; then
             echo "📄 .deployment file content:"
@@ -171,6 +219,7 @@ jobs:
           echo "   - src/index.js: ✓"
           echo "   - web.config: ✓"
           echo "   - .deployment: ✓"
+          echo "   - .deploy.cmd: ✓"
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -235,21 +284,25 @@ jobs:
           echo "   Configuration → General settings → Stack settings"
           echo "   Should show: Node.js 20.x"
       
-      - name: Deploy files to Azure
-        uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
-        with:
-          app-name: 'Maya'
-          slot-name: 'Production'
-          package: . # Point to the current directory where artifact was downloaded
-      
-      - name: Trigger npm install build (like sampleBackend)
+      - name: Create deployment ZIP package
         run: |
-          echo "🔨 Triggering npm install build on Azure..."
-          echo "   This matches how sampleBackend works - explicit build trigger"
-          echo "   This will take ~10-15 minutes (matching sampleBackend deployment time)"
+          echo "📦 Creating deployment ZIP package..."
+          # Create ZIP excluding git and other unnecessary files
+          zip -r deploy.zip . -x "*.git*" "*.DS_Store*" || {
+            # Fallback if zip command fails
+            echo "Using alternative ZIP method..."
+            find . -type f ! -path "*/\.*" -exec zip deploy.zip {} +
+          }
+          echo "✅ ZIP package created"
+          ls -lh deploy.zip
+      
+      - name: Deploy via Kudu ZIP API (triggers build automatically)
+        run: |
+          echo "🚀 Deploying via Kudu ZIP API..."
+          echo "   This method triggers SCM build automatically (like sampleBackend)"
+          echo "   With SCM_DO_BUILD_DURING_DEPLOYMENT=true, npm install will run automatically"
           
-          # Get publishing credentials for Kudu API
+          # Get publishing credentials
           PUBLISH_CREDS=$(az webapp deployment list-publishing-profiles \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
@@ -271,25 +324,24 @@ jobs:
           
           KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
           
-          # Trigger build via Kudu build API (this is what sampleBackend does)
-          echo "Triggering build via Kudu API..."
-          BUILD_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+          # Deploy via Kudu ZIP API (this triggers build automatically)
+          echo "Uploading ZIP and triggering build..."
+          DEPLOY_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
             -X POST \
-            "$KUDU_URL/api/command" \
-            -H "Content-Type: application/json" \
-            -d "{\"command\": \"npm install --production\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" 2>&1)
+            "$KUDU_URL/api/zipdeploy?isAsync=true" \
+            -H "Content-Type: application/zip" \
+            --data-binary "@deploy.zip" 2>&1)
           
-          if echo "$BUILD_RESPONSE" | grep -q "error\|Error\|ERROR"; then
-            echo "⚠️ WARNING: Build trigger may have issues, but continuing..."
-            echo "Response: $BUILD_RESPONSE"
-          else
-            echo "✅ Build command submitted"
-          fi
+          echo "Deployment response: $DEPLOY_RESPONSE"
           
-          # Wait for npm install to complete (this is why it takes 15-20 minutes total)
+          # Wait for deployment and build to complete
           echo ""
-          echo "⏳ Waiting for npm install to complete..."
-          echo "   This is the same process as sampleBackend (~15-20 minutes total)"
+          echo "⏳ Waiting for deployment and npm install to complete..."
+          echo "   This takes ~15-20 minutes (matching sampleBackend)"
+          echo "   - ZIP upload: ~1-2 minutes"
+          echo "   - npm install: ~10-15 minutes (automatic via SCM build)"
+          echo "   - Application startup: ~1 minute"
+          echo ""
           echo "   Checking every 30 seconds for node_modules..."
           
           # Poll for node_modules directory (up to 20 minutes)
@@ -308,11 +360,6 @@ jobs:
               echo "✅ node_modules found! npm install completed."
               break
             fi
-            
-            # If we've waited 20 minutes, break anyway
-            if [ $i -eq 40 ]; then
-              echo "⚠️ WARNING: Timeout waiting for node_modules. Check Azure logs manually."
-            fi
           done
           
           # Final verification
@@ -328,9 +375,14 @@ jobs:
             echo "   Total time: ~15-20 minutes (matching sampleBackend)"
           else
             echo ""
-            echo "⚠️ WARNING: node_modules may not exist. Check manually via Kudu:"
-            echo "   $KUDU_URL"
+            echo "⚠️ WARNING: node_modules may not exist after 20 minutes."
+            echo "   Check deployment logs in Azure Portal:"
+            echo "   https://portal.azure.com -> App Service -> Deployment Center -> Logs"
+            echo ""
+            echo "   Or check via Kudu: $KUDU_URL"
             echo "   Navigate to: D:\\home\\site\\wwwroot"
+            echo ""
+            echo "   Manual fix: Run 'npm install --production' via Kudu Console"
             exit 1
           fi
       
