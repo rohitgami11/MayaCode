@@ -77,7 +77,7 @@ jobs:
           # Verify .deploy.cmd exists (deployment script for npm install)
           if [ ! -f ".deploy.cmd" ]; then
             echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
-            cat > .deploy.cmd << 'EOF'
+            cat > .deploy.cmd << 'DEPLOY_EOF'
 @if "%SCM_NODE_PATH"=="" (
   call :ExecuteCmd "npm install --production" 
 ) else (
@@ -95,7 +95,7 @@ if "%ERRORLEVEL%" neq "0" (
 )
 endlocal
 goto :EOF
-EOF
+DEPLOY_EOF
           fi
           
           echo "✅ Deployment package prepared:"
@@ -185,7 +185,7 @@ EOF
           
           if [ ! -f ".deploy.cmd" ]; then 
             echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
-            cat > .deploy.cmd << 'EOF'
+            cat > .deploy.cmd << 'DEPLOY_EOF'
 @if "%SCM_NODE_PATH"=="" (
   call :ExecuteCmd "npm install --production" 
 ) else (
@@ -203,7 +203,7 @@ if "%ERRORLEVEL%" neq "0" (
 )
 endlocal
 goto :EOF
-EOF
+DEPLOY_EOF
           fi
           
           # Verify .deployment content
