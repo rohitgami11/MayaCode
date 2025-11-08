@@ -80,36 +80,67 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
+          path: .
       
-      - name: Flatten artifact structure
+      - name: Flatten artifact structure (Backend subdirectory to root)
         run: |
-          # Find package.json (handle broken pipe gracefully)
-          PACKAGE_JSON_PATH=$(find . -name "package.json" -type f 2>/dev/null | head -1) || PACKAGE_JSON_PATH=""
+          echo "Current directory structure:"
+          ls -la
+          echo ""
           
-          if [ -z "$PACKAGE_JSON_PATH" ] || [ ! -f "$PACKAGE_JSON_PATH" ]; then
-            echo "ERROR: package.json not found"
-            echo "Current directory contents:"
-            ls -la
-            exit 1
-          fi
-          
-          # If package.json is not at root, flatten the structure
-          if [ "$PACKAGE_JSON_PATH" != "./package.json" ]; then
-            PACKAGE_DIR=$(dirname "$PACKAGE_JSON_PATH")
-            PACKAGE_DIR="${PACKAGE_DIR#./}"
-            echo "Flattening from: $PACKAGE_DIR"
+          # Check if Backend directory exists (artifact was uploaded from Backend/)
+          if [ -d "Backend" ]; then
+            echo "📦 Found Backend subdirectory - flattening to root..."
+            echo "Contents of Backend directory:"
+            ls -la Backend/
+            echo ""
+            
+            # Move all contents from Backend/ to root
             shopt -s dotglob nullglob
-            for item in "$PACKAGE_DIR"/* "$PACKAGE_DIR"/.[!.]* "$PACKAGE_DIR"/..?*; do
-              [ -e "$item" ] && mv "$item" . 2>/dev/null || true
+            for item in Backend/* Backend/.[!.]* Backend/..?*; do
+              if [ -e "$item" ]; then
+                echo "Moving: $item -> $(basename "$item")"
+                mv "$item" . 2>/dev/null || true
+              fi
             done
             shopt -u dotglob nullglob
-            find . -type d -empty -delete 2>/dev/null || true
+            
+            # Remove empty Backend directory
+            rmdir Backend 2>/dev/null || true
+            echo "✅ Flattened structure"
+          else
+            echo "ℹ️ No Backend subdirectory found - assuming already at root"
           fi
           
-          # Verify required files exist
-          if [ ! -f "package.json" ]; then echo "ERROR: package.json missing"; exit 1; fi
-          if [ ! -f "src/index.js" ]; then echo "ERROR: src/index.js missing"; exit 1; fi
-          if [ ! -f "web.config" ]; then echo "ERROR: web.config missing"; exit 1; fi
+          echo ""
+          echo "Final directory structure:"
+          ls -la
+          echo ""
+          
+          # Verify required files exist at root (matching sampleBackend structure)
+          if [ ! -f "package.json" ]; then 
+            echo "❌ ERROR: package.json missing at root"
+            exit 1
+          fi
+          if [ ! -f "src/index.js" ]; then 
+            echo "❌ ERROR: src/index.js missing"
+            exit 1
+          fi
+          if [ ! -f "web.config" ]; then 
+            echo "❌ ERROR: web.config missing"
+            exit 1
+          fi
+          if [ ! -f ".deployment" ]; then 
+            echo "⚠️ WARNING: .deployment file missing (Azure will use default build settings)"
+          fi
+          
+          echo "✅ All required files verified at root level"
+          echo "   - package.json: ✓"
+          echo "   - src/index.js: ✓"
+          echo "   - web.config: ✓"
+          if [ -f ".deployment" ]; then
+            echo "   - .deployment: ✓"
+          fi
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -134,6 +165,10 @@ jobs:
       
       - name: Configure App Service
         run: |
+          # Set app settings for Windows App Service with iisnode
+          echo "Configuring Azure App Service..."
+          
+          # Set Node.js version (critical for Windows App Service)
           az webapp config appsettings set \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
@@ -142,11 +177,33 @@ jobs:
               WEBSITE_NODE_DEFAULT_VERSION=20.11.1 \
               SCM_COMMAND_IDLE_TIMEOUT=600 \
             --output none
+          
+          # Also set via stack configuration (more reliable)
+          az webapp config set \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --linux-fx-version "" \
+            --output none
+          
+          # For Windows App Service, ensure startup command is not set (iisnode uses web.config)
           az webapp config set \
             --name Maya \
             --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
             --startup-file "" \
             --output none
+          
+          echo "✅ Configured build settings"
+          
+          # Verify Node.js version is set
+          NODE_VERSION=$(az webapp config appsettings list \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?name=='WEBSITE_NODE_DEFAULT_VERSION'].value" -o tsv)
+          echo "Node.js version setting: ${NODE_VERSION:-'not set (using default)'}"
+          echo ""
+          echo "⚠️ IMPORTANT: If Node.js version is old, check Azure Portal:"
+          echo "   Configuration → General settings → Stack settings"
+          echo "   Should show: Node.js 20.x"
       
       - name: Deploy using GitHub Action
         uses: azure/webapps-deploy@v3

@@ -22,6 +22,23 @@
     console.log("📋 Working Directory:", process.cwd());
     console.log("📋 __dirname:", __dirname);
     console.log("==================================================");
+    
+    // Check Node.js version (using basic syntax for compatibility)
+    var nodeVersion = process.version;
+    var majorVersion = parseInt(nodeVersion.split('.')[0].substring(1), 10);
+    
+    if (majorVersion < 18) {
+      console.error("==========================================");
+      console.error("❌ FATAL ERROR: Node.js version too old!");
+      console.error("Current version: " + nodeVersion);
+      console.error("Required version: Node.js 18+ or 20+");
+      console.error("");
+      console.error("This application requires modern Node.js features.");
+      console.error("Please set WEBSITE_NODE_DEFAULT_VERSION=20.11.1");
+      console.error("And ensure Stack Settings use Node.js 20.x");
+      console.error("==========================================");
+      process.exit(1);
+    }
   } catch (e) {
     // Last resort - try to write error to a file or use basic console
     try {
