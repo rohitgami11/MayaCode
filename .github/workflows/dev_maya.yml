@@ -288,24 +288,48 @@ jobs:
           
           KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
           
-          # Deploy via Kudu ZIP API (this triggers build automatically)
-          echo "Uploading ZIP and triggering build..."
+          # Deploy via Kudu ZIP API (synchronous to ensure files are deployed)
+          echo "Uploading ZIP package..."
           DEPLOY_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
             -X POST \
-            "$KUDU_URL/api/zipdeploy?isAsync=true" \
+            "$KUDU_URL/api/zipdeploy" \
             -H "Content-Type: application/zip" \
             --data-binary "@deploy.zip" 2>&1)
           
           echo "Deployment response: $DEPLOY_RESPONSE"
           
-          # Wait for deployment and build to complete
+          # Wait a moment for files to be extracted
+          echo "Waiting for files to be extracted..."
+          sleep 10
+          
+          # Trigger SCM build explicitly (ZIP deploy doesn't auto-trigger build)
           echo ""
-          echo "⏳ Waiting for deployment and npm install to complete..."
-          echo "   This takes ~15-20 minutes (matching sampleBackend)"
-          echo "   - ZIP upload: ~1-2 minutes"
-          echo "   - npm install: ~10-15 minutes (automatic via SCM build)"
-          echo "   - Application startup: ~1 minute"
+          echo "🔨 Triggering SCM build to run npm install..."
+          echo "   ZIP deploy doesn't auto-trigger SCM build, so we trigger it manually"
+          
+          # Trigger build via Kudu build API
+          echo "Triggering build via Kudu build API..."
+          BUILD_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            "$KUDU_URL/api/build" \
+            -H "Content-Type: application/json" \
+            -d "{}" 2>&1)
+          
+          echo "Build API response: $BUILD_RESPONSE"
+          
+          # Also try to run the deployment script directly as a backup
+          echo "Also running deployment script directly..."
+          SCRIPT_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"cd D:\\\\home\\\\site\\\\wwwroot && if (Test-Path .deploy.cmd) { cmd /c .deploy.cmd } else { npm install --production }\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" 2>&1)
+          
+          echo "Script execution response: $SCRIPT_RESPONSE"
+          
+          # Wait for npm install to complete
           echo ""
+          echo "⏳ Waiting for npm install to complete..."
+          echo "   This takes ~10-15 minutes (matching sampleBackend)"
           echo "   Checking every 30 seconds for node_modules..."
           
           # Poll for node_modules directory (up to 20 minutes)
