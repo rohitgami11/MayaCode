@@ -235,7 +235,7 @@ jobs:
           echo "   Configuration → General settings → Stack settings"
           echo "   Should show: Node.js 20.x"
       
-      - name: Deploy to Azure (npm install runs automatically)
+      - name: Deploy files to Azure
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
@@ -243,25 +243,95 @@ jobs:
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
       
-      - name: Wait for deployment and npm install to complete
+      - name: Trigger npm install build (like sampleBackend)
         run: |
-          echo "⏳ Waiting for deployment to complete..."
-          echo "   Azure will automatically run 'npm install' during deployment"
-          echo "   (This is why sampleBackend takes ~20 minutes - same process)"
-          echo "   SCM_DO_BUILD_DURING_DEPLOYMENT=true ensures npm install runs automatically"
-          echo ""
-          echo "   Deployment includes:"
-          echo "   1. File upload (~1-2 minutes)"
-          echo "   2. npm install (~10-15 minutes) - automatic via Azure"
-          echo "   3. Application startup (~1 minute)"
-          echo ""
-          echo "   Total time: ~15-20 minutes (matching sampleBackend)"
+          echo "🔨 Triggering npm install build on Azure..."
+          echo "   This matches how sampleBackend works - explicit build trigger"
+          echo "   This will take ~10-15 minutes (matching sampleBackend deployment time)"
           
-          # Wait for deployment to fully complete (including npm install)
-          # The deployment action completes when files are uploaded, but npm install continues
-          sleep 120
+          # Get publishing credentials for Kudu API
+          PUBLISH_CREDS=$(az webapp deployment list-publishing-profiles \
+            --name Maya \
+            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
+            --query "[?publishMethod=='MSDeploy'].{userName:userName,userPWD:userPWD}" \
+            --output json | jq -r '.[0]')
           
-          echo "✅ Deployment should be complete. Azure runs npm install automatically."
-          echo "   Check deployment logs in Azure Portal if needed."
+          if [ -z "$PUBLISH_CREDS" ] || [ "$PUBLISH_CREDS" = "null" ]; then
+            echo "❌ ERROR: Could not get publishing credentials"
+            exit 1
+          fi
+          
+          USERNAME=$(echo "$PUBLISH_CREDS" | jq -r '.userName')
+          PASSWORD=$(echo "$PUBLISH_CREDS" | jq -r '.userPWD')
+          
+          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ "$USERNAME" = "null" ] || [ "$PASSWORD" = "null" ]; then
+            echo "❌ ERROR: Could not extract credentials"
+            exit 1
+          fi
+          
+          KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
+          
+          # Trigger build via Kudu build API (this is what sampleBackend does)
+          echo "Triggering build via Kudu API..."
+          BUILD_RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            "$KUDU_URL/api/command" \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"npm install --production\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" 2>&1)
+          
+          if echo "$BUILD_RESPONSE" | grep -q "error\|Error\|ERROR"; then
+            echo "⚠️ WARNING: Build trigger may have issues, but continuing..."
+            echo "Response: $BUILD_RESPONSE"
+          else
+            echo "✅ Build command submitted"
+          fi
+          
+          # Wait for npm install to complete (this is why it takes 15-20 minutes total)
+          echo ""
+          echo "⏳ Waiting for npm install to complete..."
+          echo "   This is the same process as sampleBackend (~15-20 minutes total)"
+          echo "   Checking every 30 seconds for node_modules..."
+          
+          # Poll for node_modules directory (up to 20 minutes)
+          for i in {1..40}; do
+            sleep 30
+            echo "   Checking... ($((i * 30))s elapsed)"
+            
+            # Check if node_modules exists
+            CHECK_RESULT=$(curl -s -u "$USERNAME:$PASSWORD" \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -d "{\"command\": \"if (Test-Path 'D:\\\\home\\\\site\\\\wwwroot\\\\node_modules') { Write-Output 'EXISTS' } else { Write-Output 'MISSING' }\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
+              "$KUDU_URL/api/command" 2>/dev/null | jq -r '.Output' 2>/dev/null || echo "MISSING")
+            
+            if echo "$CHECK_RESULT" | grep -q "EXISTS"; then
+              echo "✅ node_modules found! npm install completed."
+              break
+            fi
+            
+            # If we've waited 20 minutes, break anyway
+            if [ $i -eq 40 ]; then
+              echo "⚠️ WARNING: Timeout waiting for node_modules. Check Azure logs manually."
+            fi
+          done
+          
+          # Final verification
+          FINAL_CHECK=$(curl -s -u "$USERNAME:$PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"command\": \"if (Test-Path 'D:\\\\home\\\\site\\\\wwwroot\\\\node_modules') { Write-Output 'EXISTS' } else { Write-Output 'MISSING' }\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
+            "$KUDU_URL/api/command" 2>/dev/null | jq -r '.Output' 2>/dev/null || echo "MISSING")
+          
+          if echo "$FINAL_CHECK" | grep -q "EXISTS"; then
+            echo ""
+            echo "✅ Deployment complete! Dependencies installed successfully."
+            echo "   Total time: ~15-20 minutes (matching sampleBackend)"
+          else
+            echo ""
+            echo "⚠️ WARNING: node_modules may not exist. Check manually via Kudu:"
+            echo "   $KUDU_URL"
+            echo "   Navigate to: D:\\home\\site\\wwwroot"
+            exit 1
+          fi
       
           
