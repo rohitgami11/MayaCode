@@ -77,25 +77,7 @@ jobs:
           # Verify .deploy.cmd exists (deployment script for npm install)
           if [ ! -f ".deploy.cmd" ]; then
             echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
-            cat > .deploy.cmd << 'DEPLOY_EOF'
-@if "%SCM_NODE_PATH"=="" (
-  call :ExecuteCmd "npm install --production" 
-) else (
-  call :ExecuteCmd "%SCM_NODE_PATH%\npm.cmd" install --production
-)
-goto :EOF
-
-:ExecuteCmd
-setlocal
-set _CMD_=%*
-call %_CMD_%
-if "%ERRORLEVEL%" neq "0" (
-  echo Failed to execute '%_CMD_%'
-  exit /b %ERRORLEVEL%
-)
-endlocal
-goto :EOF
-DEPLOY_EOF
+            printf '@if "%%SCM_NODE_PATH%%"=="" (\n  call :ExecuteCmd "npm install --production" \n) else (\n  call :ExecuteCmd "%%SCM_NODE_PATH%%\\npm.cmd" install --production\n)\ngoto :EOF\n\n:ExecuteCmd\nsetlocal\nset _CMD_=%%*\ncall %%_CMD_%%\nif "%%ERRORLEVEL%%" neq "0" (\n  echo Failed to execute '\''%%_CMD_%%'\''\n  exit /b %%ERRORLEVEL%%\n)\nendlocal\ngoto :EOF\n' > .deploy.cmd
           fi
           
           echo "✅ Deployment package prepared:"
@@ -185,25 +167,7 @@ DEPLOY_EOF
           
           if [ ! -f ".deploy.cmd" ]; then 
             echo "⚠️ WARNING: .deploy.cmd missing - creating it..."
-            cat > .deploy.cmd << 'DEPLOY_EOF'
-@if "%SCM_NODE_PATH"=="" (
-  call :ExecuteCmd "npm install --production" 
-) else (
-  call :ExecuteCmd "%SCM_NODE_PATH%\npm.cmd" install --production
-)
-goto :EOF
-
-:ExecuteCmd
-setlocal
-set _CMD_=%*
-call %_CMD_%
-if "%ERRORLEVEL%" neq "0" (
-  echo Failed to execute '%_CMD_%'
-  exit /b %ERRORLEVEL%
-)
-endlocal
-goto :EOF
-DEPLOY_EOF
+            printf '@if "%%SCM_NODE_PATH%%"=="" (\n  call :ExecuteCmd "npm install --production" \n) else (\n  call :ExecuteCmd "%%SCM_NODE_PATH%%\\npm.cmd" install --production\n)\ngoto :EOF\n\n:ExecuteCmd\nsetlocal\nset _CMD_=%%*\ncall %%_CMD_%%\nif "%%ERRORLEVEL%%" neq "0" (\n  echo Failed to execute '\''%%_CMD_%%'\''\n  exit /b %%ERRORLEVEL%%\n)\nendlocal\ngoto :EOF\n' > .deploy.cmd
           fi
           
           # Verify .deployment content
