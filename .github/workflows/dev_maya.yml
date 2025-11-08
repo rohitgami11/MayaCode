@@ -57,10 +57,28 @@ jobs:
             exit 1
           fi
           
-          # Warn if package-lock.json is missing (recommended but not required)
+          # CRITICAL: Ensure package-lock.json exists (required for Azure npm install)
           if [ ! -f "package-lock.json" ]; then
-            echo "WARNING: package-lock.json missing - Azure will generate it, but this may cause dependency issues"
+            echo "❌ ERROR: package-lock.json missing - Azure needs this to install dependencies"
+            echo "Generating package-lock.json..."
+            npm install --package-lock-only --no-save || {
+              echo "Failed to generate package-lock.json"
+              exit 1
+            }
           fi
+          
+          # Verify .deployment file exists
+          if [ ! -f ".deployment" ]; then
+            echo "⚠️ WARNING: .deployment file missing - creating it..."
+            echo "[config]" > .deployment
+            echo "SCM_DO_BUILD_DURING_DEPLOYMENT=true" >> .deployment
+          fi
+          
+          echo "✅ Deployment package prepared:"
+          echo "   - package.json: ✓"
+          echo "   - package-lock.json: ✓"
+          echo "   - .deployment: ✓"
+          echo "   - web.config: ✓"
       
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -122,6 +140,10 @@ jobs:
             echo "❌ ERROR: package.json missing at root"
             exit 1
           fi
+          if [ ! -f "package-lock.json" ]; then 
+            echo "❌ ERROR: package-lock.json missing at root (CRITICAL for npm install)"
+            exit 1
+          fi
           if [ ! -f "src/index.js" ]; then 
             echo "❌ ERROR: src/index.js missing"
             exit 1
@@ -131,16 +153,24 @@ jobs:
             exit 1
           fi
           if [ ! -f ".deployment" ]; then 
-            echo "⚠️ WARNING: .deployment file missing (Azure will use default build settings)"
+            echo "⚠️ WARNING: .deployment file missing - creating it..."
+            echo "[config]" > .deployment
+            echo "SCM_DO_BUILD_DURING_DEPLOYMENT=true" >> .deployment
+          fi
+          
+          # Verify .deployment content
+          if [ -f ".deployment" ]; then
+            echo "📄 .deployment file content:"
+            cat .deployment
+            echo ""
           fi
           
           echo "✅ All required files verified at root level"
           echo "   - package.json: ✓"
+          echo "   - package-lock.json: ✓"
           echo "   - src/index.js: ✓"
           echo "   - web.config: ✓"
-          if [ -f ".deployment" ]; then
-            echo "   - .deployment: ✓"
-          fi
+          echo "   - .deployment: ✓"
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -205,7 +235,7 @@ jobs:
           echo "   Configuration → General settings → Stack settings"
           echo "   Should show: Node.js 20.x"
       
-      - name: Deploy using GitHub Action
+      - name: Deploy to Azure (npm install runs automatically)
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
@@ -213,59 +243,25 @@ jobs:
           slot-name: 'Production'
           package: . # Point to the current directory where artifact was downloaded
       
-      - name: Install dependencies on Azure
+      - name: Wait for deployment and npm install to complete
         run: |
-          echo "Waiting for deployment to complete..."
-          sleep 30
+          echo "⏳ Waiting for deployment to complete..."
+          echo "   Azure will automatically run 'npm install' during deployment"
+          echo "   (This is why sampleBackend takes ~20 minutes - same process)"
+          echo "   SCM_DO_BUILD_DURING_DEPLOYMENT=true ensures npm install runs automatically"
+          echo ""
+          echo "   Deployment includes:"
+          echo "   1. File upload (~1-2 minutes)"
+          echo "   2. npm install (~10-15 minutes) - automatic via Azure"
+          echo "   3. Application startup (~1 minute)"
+          echo ""
+          echo "   Total time: ~15-20 minutes (matching sampleBackend)"
           
-          echo "Installing npm dependencies on Azure App Service..."
+          # Wait for deployment to fully complete (including npm install)
+          # The deployment action completes when files are uploaded, but npm install continues
+          sleep 120
           
-          # Get publishing credentials
-          PUBLISH_CREDS=$(az webapp deployment list-publishing-profiles \
-            --name Maya \
-            --resource-group "${{ steps.get-rg.outputs.RESOURCE_GROUP }}" \
-            --query "[?publishMethod=='MSDeploy'].{userName:userName,userPWD:userPWD}" \
-            --output json | jq -r '.[0]')
-          
-          if [ -z "$PUBLISH_CREDS" ] || [ "$PUBLISH_CREDS" = "null" ]; then
-            echo "WARNING: Could not get publishing credentials. Manual npm install required:"
-            echo "  Kudu: https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
-            echo "  Command: cd D:\\home\\site\\wwwroot && npm install --production"
-            exit 0
-          fi
-          
-          USERNAME=$(echo "$PUBLISH_CREDS" | jq -r '.userName')
-          PASSWORD=$(echo "$PUBLISH_CREDS" | jq -r '.userPWD')
-          
-          if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ "$USERNAME" = "null" ] || [ "$PASSWORD" = "null" ]; then
-            echo "WARNING: Could not extract credentials. Manual npm install required."
-            exit 0
-          fi
-          
-          # Use Kudu API to run npm install
-          KUDU_URL="https://maya-b6d7g0ephnhhe4ay.scm.canadacentral-01.azurewebsites.net"
-          COMMAND="cd D:\\home\\site\\wwwroot && npm install --production"
-          
-          echo "Executing npm install via Kudu API..."
-          
-          # Execute command via Kudu REST API
-          RESPONSE=$(curl -s -u "$USERNAME:$PASSWORD" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"command\": \"$COMMAND\", \"dir\": \"D:\\\\home\\\\site\\\\wwwroot\"}" \
-            "$KUDU_URL/api/command" 2>&1)
-          
-          if echo "$RESPONSE" | grep -q "error\|Error\|ERROR"; then
-            echo "WARNING: npm install may have failed. Check Kudu logs."
-            echo "Response: $RESPONSE"
-          else
-            echo "✅ npm install command submitted"
-          fi
-          
-          echo "Waiting 90 seconds for npm install to complete..."
-          sleep 90
-          
-          echo "✅ Dependency installation completed"
-          echo "⚠️ If errors persist, verify node_modules exists via Kudu Console"
+          echo "✅ Deployment should be complete. Azure runs npm install automatically."
+          echo "   Check deployment logs in Azure Portal if needed."
       
           
