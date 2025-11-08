@@ -32,6 +32,9 @@ connectDB().catch(err => {
 const app = express();
 const path = require('path');
 
+// Trust proxy for Azure App Service (critical for correct IP/URL handling)
+app.set('trust proxy', true);
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase JSON body limit for base64 images
 app.use(express.urlencoded({ limit: '50mb', extended: false })); // Increase URL encoded limit
@@ -101,20 +104,16 @@ app.use("/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/images", imageRoutes);
 
-// Global error handler for unhandled exceptions
-app.use((err, req, res, next) => {
-  console.error('🚨 GLOBAL ERROR HANDLER:', err);
-  console.error('Error stack:', err.stack);
-  console.error('Request URL:', req.url);
-  console.error('Request method:', req.method);
-  console.error('Request body size:', req.body ? JSON.stringify(req.body).length : 'no body');
-  res.status(500).json({ 
-    message: 'Internal server error', 
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!' 
+// 404 handler for undefined routes (must be before error handler)
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    error: `Cannot ${req.method} ${req.originalUrl}`
   });
 });
 
-// Error middleware
+// Error middleware (must be last, after all routes)
 app.use(errorHandler);
 
 module.exports = app;

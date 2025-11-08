@@ -29,3 +29,5 @@ yarn-error.log*
 
 # CA certificate Kafka
 Backend/src/config/ca.pem
+
+/sampleBackend
